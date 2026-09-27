@@ -1,0 +1,27 @@
+# Données locales : base SQLite + sauvegardes (propres à chaque installation)
+data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Secrets éventuels
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Éditeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yaml

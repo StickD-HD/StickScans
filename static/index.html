@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stickscans</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#080D18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav id="main-nav">
+    <button class="nav-btn active" data-view="library-view">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5C4 4.67 4.67 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13Z"/><path d="M20 5.5c0-.83-.67-1.5-1.5-1.5H13v16h5.5c.83 0 1.5-.67 1.5-1.5v-13Z"/></svg>
+      <span>Bibliothèque</span>
+    </button>
+    <button class="nav-btn" data-view="updates-view">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/></svg>
+      <span>Nouveautés</span>
+    </button>
+    <button class="nav-btn" data-view="history-view">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/><path d="M9 2h6"/></svg>
+      <span>Historique</span>
+    </button>
+    <button class="nav-btn" data-view="settings-view">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      <span>Réglages</span>
+    </button>
+  </nav>
+
+  <div id="library-view">
+    <header>
+      <h1>📚 Stickscans</h1>
+      <div class="header-actions">
+        <span id="refresh-status-text"></span>
+        <button id="refresh-all-btn" title="Vérifier toutes les séries maintenant">↻</button>
+        <button id="add-btn">+ Ajouter</button>
+      </div>
+    </header>
+
+    <div id="add-form" class="hidden">
+      <textarea id="add-url" rows="3" placeholder="Un ou plusieurs liens scan-manga.com, un par ligne"></textarea>
+      <div id="add-category-checkboxes"></div>
+      <button id="add-submit">Ajouter</button>
+      <button id="add-cancel">Annuler</button>
+      <p id="add-error" class="error hidden"></p>
+      <p id="add-summary" class="hidden"></p>
+    </div>
+
+    <div id="category-bar">
+      <div id="category-tabs"></div>
+      <button id="manage-categories-btn" title="Gérer les catégories">⚙</button>
+    </div>
+
+    <div id="toolbar">
+      <button id="search-toggle-btn" title="Rechercher">🔍 Rechercher</button>
+      <button id="filter-toggle-btn" title="Filtres et tri">⚙ Filtres &amp; tri</button>
+    </div>
+
+    <div id="search-bar" class="hidden">
+      <input id="search-input" type="search" placeholder="Rechercher dans ma bibliothèque...">
+    </div>
+
+    <main id="library">
+      <p id="empty-msg" class="hidden">Aucune série suivie pour l'instant.</p>
+      <div id="grid" class="grid"></div>
+    </main>
+  </div>
+
+  <div id="updates-view" class="hidden">
+    <header><h1>Mises à jour</h1></header>
+    <main id="updates-list"></main>
+  </div>
+
+  <div id="history-view" class="hidden">
+    <header>
+      <h1>Historique</h1>
+      <button id="clear-history-btn">Effacer</button>
+    </header>
+    <div id="history-stats"></div>
+    <main id="history-list"></main>
+  </div>
+
+  <div id="settings-view" class="hidden">
+    <header><h1>Réglages</h1></header>
+    <main id="settings-main">
+      <section class="settings-section">
+        <h2>AniList</h2>
+        <label>Jeton d'accès AniList
+          <input id="anilist-token-input" type="password" placeholder="Colle ton jeton ici">
+        </label>
+        <p id="anilist-status" class="section-label"></p>
+        <button id="anilist-token-save">Enregistrer</button>
+      </section>
+      <section class="settings-section">
+        <h2>Catégories</h2>
+        <p class="section-label">Créer, renommer ou supprimer tes catégories.</p>
+        <button id="manage-categories-btn-settings">Gérer les catégories</button>
+      </section>
+    </main>
+  </div>
+
+  <div id="filter-modal" class="hidden">
+    <div id="filter-modal-content">
+      <h2>Filtres &amp; tri</h2>
+      <label>Trier par
+        <select id="sort-select">
+          <option value="last_checked_at">Derniers chapitres récupérés</option>
+          <option value="title">Titre</option>
+          <option value="popularity">Popularité</option>
+          <option value="year">Année</option>
+          <option value="added_at">Date d'ajout</option>
+        </select>
+      </label>
+      <label>Genre
+        <select id="genre-select"><option value="">Tous les genres</option></select>
+      </label>
+      <label>Statut
+        <select id="status-select"><option value="">Tous les statuts</option></select>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="hide-read-checkbox">
+        Masquer les séries entièrement lues
+      </label>
+      <button id="filter-modal-close">Fermer</button>
+    </div>
+  </div>
+
+  <div id="category-modal" class="hidden">
+    <div id="category-modal-content">
+      <h2>Catégories</h2>
+      <ul id="category-manage-list"></ul>
+      <div class="new-category-row">
+        <input id="new-category-input" type="text" placeholder="Nouvelle catégorie">
+        <button id="new-category-btn">Ajouter</button>
+      </div>
+      <button id="category-modal-close">Fermer</button>
+    </div>
+  </div>
+
+  <div id="chapters-view" class="hidden">
+    <header>
+      <button id="back-btn">← Retour</button>
+      <div class="header-actions-inline">
+        <button id="recheck-series-btn">↻ Actualiser</button>
+        <button id="edit-series-btn" title="Modifier">✏️</button>
+        <button id="remove-series-btn" title="Retirer cette série">🗑</button>
+      </div>
+    </header>
+
+    <div id="detail-panel">
+      <div id="detail-top">
+        <img id="detail-cover" alt="">
+        <div id="detail-info">
+          <h1 id="detail-title"></h1>
+          <div id="detail-alt-names-wrap">
+            <span id="detail-alt-names"></span>
+            <button id="alt-names-toggle" class="hidden">voir plus</button>
+          </div>
+          <div id="detail-meta"></div>
+          <div id="detail-author"></div>
+          <div id="detail-editor"></div>
+          <div id="detail-team"></div>
+        </div>
+      </div>
+
+      <div id="detail-actions">
+        <button id="anilist-action-btn">🔗 AniList</button>
+        <button id="category-action-btn">🏷 Catégorie</button>
+        <a id="detail-source-link" class="action-btn-link" target="_blank">🌐 Scan-Manga</a>
+      </div>
+
+      <div id="anilist-linked" class="hidden">
+        <span class="section-label">AniList : <span id="anilist-linked-title"></span></span>
+        <div class="anilist-fields">
+          <label>Statut
+            <select id="anilist-status-select">
+              <option value="CURRENT">En cours</option>
+              <option value="PLANNING">À lire</option>
+              <option value="COMPLETED">Terminé</option>
+              <option value="PAUSED">En pause</option>
+              <option value="DROPPED">Abandonné</option>
+              <option value="REPEATING">Relecture</option>
+            </select>
+          </label>
+          <label>Chapitre <input id="anilist-progress-input" type="number" min="0"></label>
+          <label>Note <input id="anilist-score-input" type="number" min="0" step="1"></label>
+          <label>Début <input id="anilist-start-input" type="date"></label>
+          <label>Fin <input id="anilist-end-input" type="date"></label>
+        </div>
+        <button id="anilist-save-btn">Enregistrer sur AniList</button>
+        <button id="anilist-unlink-btn">Délier</button>
+        <p id="anilist-status-text" class="section-label"></p>
+      </div>
+
+      <div id="detail-synopsis-wrap">
+        <p id="detail-synopsis"></p>
+        <button id="synopsis-toggle" class="hidden">voir plus</button>
+      </div>
+      <div id="detail-genres" class="genres-line"></div>
+
+      <button id="continue-reading-btn" class="hidden"></button>
+
+      <div id="edit-form" class="hidden">
+        <label>Titre <input id="edit-title-input" type="text"></label>
+        <label>URL de couverture <input id="edit-cover-input" type="url"></label>
+        <button id="edit-save-btn">Enregistrer</button>
+        <button id="edit-cancel-btn">Annuler</button>
+      </div>
+    </div>
+
+    <div id="chapters-toolbar">
+      <button id="select-mode-btn">Sélectionner</button>
+      <button id="select-all-btn" class="hidden">Tout sélectionner</button>
+      <button id="bulk-read-btn" class="hidden">Marquer lu</button>
+      <button id="bulk-unread-btn" class="hidden">Marquer non lu</button>
+    </div>
+    <main>
+      <ul id="chapters-list"></ul>
+    </main>
+  </div>
+
+  <div id="anilist-modal" class="hidden">
+    <div id="anilist-modal-content">
+      <h2>Lier à AniList</h2>
+      <div class="anilist-search-row">
+        <input id="anilist-search-input" type="text" placeholder="Rechercher sur AniList">
+        <button id="anilist-search-btn">Rechercher</button>
+      </div>
+      <ul id="anilist-search-results"></ul>
+      <button id="anilist-modal-close">Fermer</button>
+    </div>
+  </div>
+
+  <div id="series-category-modal" class="hidden">
+    <div id="series-category-modal-content">
+      <h2>Catégories</h2>
+      <div id="category-checkboxes"></div>
+      <button id="series-category-modal-close">Fermer</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    container_name: manhwa-tracker
+    ports:
+      - 8420:8000
+    volumes:
+      - ./data:/app/data
+    environment:
+      - BYPARR_URL=http://byparr:8191/v1
+    depends_on:
+      - byparr
+    restart: unless-stopped
+
+  byparr:
+    image: ghcr.io/thephaseless/byparr:latest
+    container_name: manhwa-byparr
+    shm_size: '2gb'
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
