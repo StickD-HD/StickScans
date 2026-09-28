@@ -555,6 +555,11 @@ def set_setting(key: str, value: str):
         )
 
 
+def delete_setting(key: str):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+
+
 # --- AniList ---
 
 def set_series_anilist_link(series_id: int, anilist_id: int | None, title: str | None):

@@ -5,7 +5,12 @@ Envoi automatique de la progression à chaque chapitre marqué lu.
 AniList ne fournit pas de jeton de rafraîchissement : le jeton dure 1 an puis doit être régénéré
 (page Paramètres de l'appli).
 """
+import base64
+import json
 import logging
+import time
+from datetime import datetime, timezone
+
 import requests
 
 from . import database
@@ -24,6 +29,17 @@ query ($search: String) {
       format
       startDate { year }
     }
+  }
+}
+"""
+
+VIEWER_QUERY = """
+query {
+  Viewer {
+    id
+    name
+    avatar { medium }
+    mediaListOptions { scoreFormat }
   }
 }
 """
@@ -75,6 +91,119 @@ def _headers() -> dict:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
+
+
+TOKEN_SETTING_KEYS = (
+    "anilist_token",
+    "anilist_user_name",
+    "anilist_user_avatar",
+    "anilist_score_format",
+    "anilist_token_expires",
+    "anilist_token_error",
+)
+INVALID_TOKEN_MESSAGE = "Jeton refusé par AniList (invalide ou expiré) : génère-en un nouveau."
+
+
+def _clean_token(raw: str) -> str:
+    """Accepte le jeton seul, ou l'URL complète contenant #access_token=..."""
+    raw = (raw or "").strip().strip("\"'")
+    if "access_token=" in raw:
+        raw = raw.split("access_token=", 1)[1].split("&", 1)[0]
+    return raw.strip()
+
+
+def _token_expiry(token: str) -> int | None:
+    """Les jetons AniList sont des JWT : la date d'expiration est dans le champ « exp »."""
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        exp = json.loads(base64.urlsafe_b64decode(payload)).get("exp")
+        return int(exp) if exp else None
+    except Exception:
+        return None
+
+
+def _fetch_viewer(token: str) -> dict:
+    """Interroge AniList avec ce jeton. ValueError = jeton refusé, RuntimeError = réseau/réponse illisible."""
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+    try:
+        resp = requests.post(API_URL, json={"query": VIEWER_QUERY}, headers=headers, timeout=15)
+    except requests.RequestException as e:
+        raise RuntimeError(f"Impossible de joindre AniList : {e}") from e
+    try:
+        data = resp.json()
+    except ValueError:
+        raise RuntimeError(f"Réponse AniList illisible (HTTP {resp.status_code})")
+    viewer = (data.get("data") or {}).get("Viewer")
+    if not viewer:
+        raise ValueError(INVALID_TOKEN_MESSAGE)
+    return viewer
+
+
+def _store_profile(viewer: dict):
+    database.set_setting("anilist_user_name", viewer.get("name") or "")
+    database.set_setting("anilist_user_avatar", (viewer.get("avatar") or {}).get("medium") or "")
+    score_format = (viewer.get("mediaListOptions") or {}).get("scoreFormat")
+    if score_format:
+        database.set_setting("anilist_score_format", score_format)
+
+
+def get_status() -> dict:
+    """État du jeton, calculé localement (aucun appel réseau, sauf pour compléter un profil manquant)."""
+    client_id = database.get_setting("anilist_client_id") or ""
+    token = _token()
+    if not token:
+        return {"configured": False, "client_id": client_id}
+
+    if not database.get_setting("anilist_user_name"):
+        try:
+            _store_profile(_fetch_viewer(token))
+        except (ValueError, RuntimeError):
+            pass
+
+    exp_raw = database.get_setting("anilist_token_expires")
+    exp = int(exp_raw) if exp_raw else _token_expiry(token)
+    now = time.time()
+    return {
+        "configured": True,
+        "client_id": client_id,
+        "name": database.get_setting("anilist_user_name") or None,
+        "avatar": database.get_setting("anilist_user_avatar") or None,
+        "score_format": database.get_setting("anilist_score_format"),
+        "expires_at": datetime.fromtimestamp(exp, tz=timezone.utc).strftime("%Y-%m-%d") if exp else None,
+        "days_left": int((exp - now) // 86400) if exp else None,
+        "expired": bool(exp and exp < now),
+        "error": database.get_setting("anilist_token_error") or None,
+    }
+
+
+def save_token(raw_token: str) -> dict:
+    token = _clean_token(raw_token)
+    if not token:
+        raise ValueError("Jeton vide")
+    viewer = _fetch_viewer(token)  # valide le jeton avant de l'enregistrer
+    exp = _token_expiry(token)
+    database.set_setting("anilist_token", token)
+    database.set_setting("anilist_token_expires", str(exp) if exp else "")
+    database.delete_setting("anilist_token_error")
+    _store_profile(viewer)
+    return get_status()
+
+
+def check_token() -> dict:
+    token = _token()
+    if token:
+        try:
+            _store_profile(_fetch_viewer(token))
+            database.delete_setting("anilist_token_error")
+        except ValueError as e:
+            database.set_setting("anilist_token_error", str(e))
+    return get_status()
+
+
+def remove_token():
+    for key in TOKEN_SETTING_KEYS:
+        database.delete_setting(key)
 
 
 def _to_fuzzy_date(date_str: str | None) -> dict | None:
@@ -185,6 +314,8 @@ def push_update(series_id: int, status=None, progress=None, score=None, start_da
         )
         data = resp.json()
         if resp.status_code != 200 or "errors" in data:
+            if resp.status_code == 401 or "Invalid token" in str(data):
+                database.set_setting("anilist_token_error", INVALID_TOKEN_MESSAGE)
             raise RuntimeError(str(data.get("errors", data)))
         entry = data["data"]["SaveMediaListEntry"]
         database.set_series_anilist_data(

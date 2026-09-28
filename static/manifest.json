@@ -5,5 +5,14 @@
   "display": "standalone",
   "background_color": "#080D18",
   "theme_color": "#080D18",
-  "icons": []
+  "icons": [],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }

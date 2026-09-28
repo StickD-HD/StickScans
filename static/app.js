@@ -14,15 +14,40 @@ const topViews = {
 const grid = document.getElementById("grid");
 const emptyMsg = document.getElementById("empty-msg");
 const addBtn = document.getElementById("add-btn");
-const addForm = document.getElementById("add-form");
+const addModal = document.getElementById("add-modal");
+const addStepInput = document.getElementById("add-step-input");
+const addStepProgress = document.getElementById("add-step-progress");
 const addUrl = document.getElementById("add-url");
-const addCategoryCheckboxes = document.getElementById("add-category-checkboxes");
+const addPasteBtn = document.getElementById("add-paste-btn");
+const addCount = document.getElementById("add-count");
+const addCategorySection = document.getElementById("add-category-section");
+const addCategoryChips = document.getElementById("add-category-chips");
 const addSubmit = document.getElementById("add-submit");
 const addCancel = document.getElementById("add-cancel");
 const addError = document.getElementById("add-error");
+const addProgressList = document.getElementById("add-progress-list");
+const addSummary = document.getElementById("add-summary");
+const addRetryBtn = document.getElementById("add-retry-btn");
+const addDoneBtn = document.getElementById("add-done-btn");
+
+const anilistConnected = document.getElementById("anilist-connected");
+const anilistConnectForm = document.getElementById("anilist-connect-form");
+const anilistAvatar = document.getElementById("anilist-avatar");
+const anilistUsername = document.getElementById("anilist-username");
+const anilistExpiry = document.getElementById("anilist-expiry");
+const anilistTokenAlert = document.getElementById("anilist-token-alert");
+const anilistCheckBtn = document.getElementById("anilist-check-btn");
+const anilistChangeBtn = document.getElementById("anilist-change-btn");
+const anilistDisconnectBtn = document.getElementById("anilist-disconnect-btn");
+const anilistHelp = document.getElementById("anilist-help");
+const anilistRedirectUrl = document.getElementById("anilist-redirect-url");
+const anilistCopyRedirect = document.getElementById("anilist-copy-redirect");
+const anilistClientIdInput = document.getElementById("anilist-client-id-input");
+const anilistAuthorizeLink = document.getElementById("anilist-authorize-link");
 const anilistTokenInput = document.getElementById("anilist-token-input");
+const anilistTokenError = document.getElementById("anilist-token-error");
 const anilistTokenSave = document.getElementById("anilist-token-save");
-const anilistStatus = document.getElementById("anilist-status");
+const anilistTokenCancel = document.getElementById("anilist-token-cancel");
 const manageCategoriesBtnSettings = document.getElementById("manage-categories-btn-settings");
 const refreshAllBtn = document.getElementById("refresh-all-btn");
 const refreshStatusText = document.getElementById("refresh-status-text");
@@ -102,6 +127,43 @@ let searchDebounce = null;
 let currentChapters = [];
 let selectionMode = false;
 let selectedChapterIds = new Set();
+let lastTopView = "library-view";
+let viewBeforeDetail = "library-view";
+let scrollBeforeDetail = 0;
+
+// --- Navigation « retour » ---
+// Chaque écran secondaire (fiche série, popups) est une « couche » liée à une entrée d'historique :
+// le geste retour d'Android, le balayage depuis le bord sur iOS et le bouton « Retour » ferment
+// tous la couche du dessus. close() ne touche qu'à l'affichage.
+const layers = [];
+let lastPopAt = 0;
+
+function pushLayer(layer) {
+  layers.push(layer);
+  history.pushState({ layer: layers.length }, "");
+}
+
+window.addEventListener("popstate", (e) => {
+  lastPopAt = Date.now();
+  const depth = (e.state && e.state.layer) || 0;
+  while (layers.length > depth) layers.pop().close();
+});
+
+function openModal(el) {
+  if (!el.classList.contains("hidden")) return;
+  el.classList.remove("hidden");
+  pushLayer({ el, close: () => el.classList.add("hidden") });
+}
+
+function closeModal(el) {
+  const top = layers[layers.length - 1];
+  if (top && top.el === el) history.back();
+  else el.classList.add("hidden");
+}
+
+[categoryModal, filterModal, anilistModal, seriesCategoryModal].forEach((m) => {
+  m.addEventListener("click", (e) => { if (e.target === m) closeModal(m); });
+});
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -122,6 +184,7 @@ function formatDateBucket(dateStr) {
 }
 
 function goToTopView(viewId) {
+  lastTopView = viewId;
   navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === viewId));
   Object.values(topViews).forEach((v) => v.classList.add("hidden"));
   chaptersView.classList.add("hidden");
@@ -137,12 +200,73 @@ navButtons.forEach((btn) => {
   });
 });
 
+let anilistEditing = false;
+let anilistStatusCache = null;
+
+function updateAuthorizeLink() {
+  const id = anilistClientIdInput.value.trim();
+  const valid = /^\d+$/.test(id);
+  anilistAuthorizeLink.classList.toggle("disabled", !valid);
+  if (valid) {
+    anilistAuthorizeLink.href = `https://anilist.co/api/v2/oauth/authorize?client_id=${id}&response_type=token`;
+  } else {
+    anilistAuthorizeLink.removeAttribute("href");
+  }
+}
+
+function showAnilistTokenError(message) {
+  anilistTokenError.textContent = message || "";
+  anilistTokenError.classList.toggle("hidden", !message);
+}
+
+function renderAnilistSettings(status) {
+  anilistStatusCache = status;
+  const connected = status.configured && !anilistEditing;
+  anilistConnected.classList.toggle("hidden", !connected);
+  anilistConnectForm.classList.toggle("hidden", connected);
+  anilistTokenCancel.classList.toggle("hidden", !(status.configured && anilistEditing));
+  showAnilistTokenError("");
+  if (status.client_id && !anilistClientIdInput.value) anilistClientIdInput.value = status.client_id;
+  updateAuthorizeLink();
+  anilistHelp.open = !status.configured;
+  if (!status.configured) return;
+
+  anilistUsername.textContent = status.name || "Compte connecté";
+  if (status.avatar) {
+    anilistAvatar.src = status.avatar;
+    anilistAvatar.classList.remove("hidden");
+  } else {
+    anilistAvatar.classList.add("hidden");
+  }
+
+  let expiryText = "Date d'expiration inconnue";
+  let warn = false;
+  if (status.expired) {
+    expiryText = "Jeton expiré";
+    warn = true;
+  } else if (status.expires_at) {
+    const date = new Date(status.expires_at + "T00:00:00Z").toLocaleDateString("fr-FR", {
+      day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+    });
+    expiryText = `Valable jusqu'au ${date} (${status.days_left} j)`;
+    warn = status.days_left <= 30;
+  }
+  anilistExpiry.textContent = expiryText;
+  anilistExpiry.classList.toggle("warn", warn);
+
+  const alertText = status.error || (status.expired ? "Ton jeton a expiré : génère-en un nouveau." : "");
+  anilistTokenAlert.textContent = alertText ? "⚠️ " + alertText : "";
+  anilistTokenAlert.classList.toggle("hidden", !alertText);
+}
+
 async function loadSettingsAnilistStatus() {
-  const res = await fetch("/api/settings/anilist");
-  const status = await res.json();
-  anilistStatus.textContent = status.configured
-    ? "Jeton AniList déjà configuré."
-    : "Aucun jeton configuré pour l'instant.";
+  anilistEditing = false;
+  try {
+    const res = await fetch("/api/settings/anilist");
+    renderAnilistSettings(await res.json());
+  } catch (e) {
+    anilistConnected.classList.add("hidden");
+  }
 }
 
 function renderGroupedList(container, items, dateField, labelFn) {
@@ -167,11 +291,7 @@ function renderGroupedList(container, items, dateField, labelFn) {
       <img src="${item.series_cover || ""}" alt="" loading="lazy">
       <span>${labelFn(item)}</span>
     `;
-    row.addEventListener("click", () => {
-      goToTopView("library-view");
-      libraryView.classList.add("hidden");
-      openChaptersView(item.series_id);
-    });
+    row.addEventListener("click", () => openChaptersView(item.series_id));
     container.appendChild(row);
   }
 }
@@ -269,34 +389,114 @@ async function loadCategoryManageList() {
   });
 }
 
-anilistTokenSave.addEventListener("click", async () => {
+async function saveAnilistToken() {
   const token = anilistTokenInput.value.trim();
-  if (!token) return;
-  await fetch("/api/settings/anilist", {
+  if (!token) {
+    showAnilistTokenError("Colle ton jeton d'abord.");
+    return;
+  }
+  anilistTokenSave.disabled = true;
+  anilistTokenSave.textContent = "Vérification...";
+  showAnilistTokenError("");
+  try {
+    const res = await fetch("/api/settings/anilist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Erreur inconnue");
+    anilistTokenInput.value = "";
+    anilistEditing = false;
+    renderAnilistSettings(data);
+  } catch (e) {
+    showAnilistTokenError(e.message);
+  } finally {
+    anilistTokenSave.disabled = false;
+    anilistTokenSave.textContent = "Connecter";
+  }
+}
+
+anilistTokenSave.addEventListener("click", saveAnilistToken);
+anilistTokenInput.addEventListener("keydown", (e) => { if (e.key === "Enter") saveAnilistToken(); });
+
+anilistTokenCancel.addEventListener("click", () => {
+  anilistEditing = false;
+  anilistTokenInput.value = "";
+  if (anilistStatusCache) renderAnilistSettings(anilistStatusCache);
+});
+
+anilistChangeBtn.addEventListener("click", () => {
+  anilistEditing = true;
+  if (anilistStatusCache) renderAnilistSettings(anilistStatusCache);
+  anilistTokenInput.focus();
+});
+
+anilistCheckBtn.addEventListener("click", async () => {
+  anilistCheckBtn.disabled = true;
+  anilistCheckBtn.textContent = "Vérification...";
+  try {
+    const res = await fetch("/api/settings/anilist/check", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Erreur inconnue");
+    renderAnilistSettings(data);
+    if (!data.error && !data.expired) anilistTokenAlert.classList.add("hidden");
+  } catch (e) {
+    anilistTokenAlert.textContent = "⚠️ " + e.message;
+    anilistTokenAlert.classList.remove("hidden");
+  } finally {
+    anilistCheckBtn.disabled = false;
+    anilistCheckBtn.textContent = "Vérifier";
+  }
+});
+
+anilistDisconnectBtn.addEventListener("click", async () => {
+  if (!confirm("Déconnecter AniList ? Tes séries restent liées, mais plus rien ne sera envoyé tant qu'un nouveau jeton n'est pas configuré.")) return;
+  const res = await fetch("/api/settings/anilist", { method: "DELETE" });
+  anilistEditing = false;
+  renderAnilistSettings(await res.json());
+});
+
+anilistClientIdInput.addEventListener("input", updateAuthorizeLink);
+anilistClientIdInput.addEventListener("change", () => {
+  fetch("/api/settings/anilist/client-id", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token }),
-  });
-  anilistTokenInput.value = "";
-  anilistStatus.textContent = "Jeton enregistré.";
+    body: JSON.stringify({ client_id: anilistClientIdInput.value.trim() }),
+  }).catch(() => {});
+});
+
+anilistCopyRedirect.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(anilistRedirectUrl.textContent.trim());
+    anilistCopyRedirect.textContent = "Copié ✓";
+  } catch (e) {
+    const range = document.createRange();
+    range.selectNodeContents(anilistRedirectUrl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    anilistCopyRedirect.textContent = "Sélectionné";
+  }
+  setTimeout(() => { anilistCopyRedirect.textContent = "Copier"; }, 1600);
 });
 
 manageCategoriesBtn.addEventListener("click", () => {
-  categoryModal.classList.remove("hidden");
+  openModal(categoryModal);
   loadCategoryManageList();
 });
 manageCategoriesBtnSettings.addEventListener("click", () => {
-  categoryModal.classList.remove("hidden");
+  openModal(categoryModal);
   loadCategoryManageList();
 });
-categoryModalClose.addEventListener("click", () => categoryModal.classList.add("hidden"));
+categoryModalClose.addEventListener("click", () => closeModal(categoryModal));
 
 searchToggleBtn.addEventListener("click", () => {
   searchBar.classList.toggle("hidden");
   if (!searchBar.classList.contains("hidden")) searchInput.focus();
 });
-filterToggleBtn.addEventListener("click", () => filterModal.classList.remove("hidden"));
-filterModalClose.addEventListener("click", () => filterModal.classList.add("hidden"));
+filterToggleBtn.addEventListener("click", () => openModal(filterModal));
+filterModalClose.addEventListener("click", () => closeModal(filterModal));
 newCategoryBtn.addEventListener("click", async () => {
   const name = newCategoryInput.value.trim();
   if (!name) return;
@@ -309,23 +509,6 @@ newCategoryBtn.addEventListener("click", async () => {
   loadCategoryManageList();
   loadCategoryTabs();
 });
-
-async function loadAddCategoryCheckboxes() {
-  const res = await fetch("/api/categories");
-  const categories = await res.json();
-  addCategoryCheckboxes.innerHTML = "";
-  if (categories.length === 0) {
-    addCategoryCheckboxes.innerHTML = '<span class="section-label">Aucune catégorie créée pour l\'instant.</span>';
-    return;
-  }
-  addCategoryCheckboxes.innerHTML = '<span class="section-label">Catégorie(s) :</span>';
-  for (const c of categories) {
-    const label = document.createElement("label");
-    label.className = "category-check-label";
-    label.innerHTML = `<input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}`;
-    addCategoryCheckboxes.appendChild(label);
-  }
-}
 
 async function loadGenreSelect() {
   const res = await fetch("/api/genres");
@@ -421,10 +604,15 @@ async function openChaptersView(seriesId) {
   selectAllBtn.classList.add("hidden");
   bulkReadBtn.classList.add("hidden");
   bulkUnreadBtn.classList.add("hidden");
-  libraryView.classList.add("hidden");
-  chaptersView.classList.remove("hidden");
   editForm.classList.add("hidden");
-  seriesCategoryModal.classList.add("hidden");
+  if (chaptersView.classList.contains("hidden")) {
+    viewBeforeDetail = lastTopView;
+    scrollBeforeDetail = window.scrollY;
+    Object.values(topViews).forEach((v) => v.classList.add("hidden"));
+    chaptersView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+    pushLayer({ detail: true, close: closeDetailUI });
+  }
   await loadSeriesDetail();
   await loadChapters();
 }
@@ -649,11 +837,19 @@ removeSeriesBtn.addEventListener("click", async () => {
   backToLibrary();
 });
 
-function backToLibrary() {
+// Ferme la fiche (affichage seulement) et revient à l'onglet d'où l'on venait.
+function closeDetailUI() {
   chaptersView.classList.add("hidden");
-  goToTopView("library-view");
+  goToTopView(viewBeforeDetail);
   currentSeriesId = null;
-  loadLibrary();
+  const reload = { "library-view": loadLibrary, "updates-view": loadUpdates, "history-view": loadHistory }[viewBeforeDetail];
+  Promise.resolve(reload && reload()).then(() => window.scrollTo(0, scrollBeforeDetail));
+}
+
+function backToLibrary() {
+  const top = layers[layers.length - 1];
+  if (top && top.detail) history.back();
+  else closeDetailUI();
 }
 
 backBtn.addEventListener("click", backToLibrary);
@@ -698,16 +894,16 @@ anilistActionBtn.addEventListener("click", () => {
   if (anilistActionBtn.dataset.linked === "1") {
     anilistLinked.classList.toggle("hidden");
   } else {
-    anilistModal.classList.remove("hidden");
+    openModal(anilistModal);
   }
 });
-anilistModalClose.addEventListener("click", () => anilistModal.classList.add("hidden"));
+anilistModalClose.addEventListener("click", () => closeModal(anilistModal));
 
 categoryActionBtn.addEventListener("click", () => {
-  seriesCategoryModal.classList.remove("hidden");
+  openModal(seriesCategoryModal);
   loadSeriesCategories();
 });
-seriesCategoryModalClose.addEventListener("click", () => seriesCategoryModal.classList.add("hidden"));
+seriesCategoryModalClose.addEventListener("click", () => closeModal(seriesCategoryModal));
 
 anilistSearchBtn.addEventListener("click", async () => {
   const q = anilistSearchInput.value.trim();
@@ -733,7 +929,7 @@ anilistSearchBtn.addEventListener("click", async () => {
         });
         const data = await linkRes.json();
         renderAnilistSection(data);
-        anilistModal.classList.add("hidden");
+        closeModal(anilistModal);
       });
       anilistSearchResults.appendChild(li);
     }
@@ -821,65 +1017,248 @@ searchInput.addEventListener("input", () => {
   searchDebounce = setTimeout(loadLibrary, 300);
 });
 
-addBtn.addEventListener("click", () => {
-  addForm.classList.toggle("hidden");
+// ----- Popup d'ajout -----
+const SCAN_MANGA_PREFIX = "https://www.scan-manga.com/";
+let addRunning = false;
+let addFailedUrls = [];
+const addSelectedCategories = new Set();
+
+function extractUrls(text) {
+  const seen = new Set();
+  const valid = [];
+  for (let u of text.match(/https?:\/\/[^\s"'<>]+/g) || []) {
+    u = u.replace(/[),.;]+$/, "").replace(/^https?:\/\/(www\.)?scan-manga\.com/i, "https://www.scan-manga.com");
+    if (u.startsWith(SCAN_MANGA_PREFIX) && !seen.has(u)) {
+      seen.add(u);
+      valid.push(u);
+    }
+  }
+  const ignored = text.split("\n").map((l) => l.trim()).filter((l) => l && !/scan-manga\.com/i.test(l)).length;
+  return { valid, ignored };
+}
+
+function urlLabel(url) {
+  try {
+    const last = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() || url);
+    return last.replace(/\.html$/i, "").replace(/-/g, " ");
+  } catch (e) {
+    return url;
+  }
+}
+
+function updateAddCount() {
+  const { valid, ignored } = extractUrls(addUrl.value);
+  addSubmit.disabled = valid.length === 0;
+  addSubmit.textContent = valid.length > 1 ? `Ajouter ${valid.length} séries` : "Ajouter";
+  if (!addUrl.value.trim()) {
+    addCount.textContent = "";
+    addCount.classList.remove("warn");
+    return;
+  }
+  let text = valid.length === 0
+    ? "Aucun lien scan-manga.com valide"
+    : `${valid.length} lien${valid.length > 1 ? "s" : ""} valide${valid.length > 1 ? "s" : ""}`;
+  if (valid.length > 0 && ignored > 0) text += ` · ${ignored} ligne${ignored > 1 ? "s" : ""} ignorée${ignored > 1 ? "s" : ""}`;
+  addCount.textContent = text;
+  addCount.classList.toggle("warn", valid.length === 0 || ignored > 0);
+}
+
+async function loadAddCategoryChips() {
+  const res = await fetch("/api/categories");
+  const categories = await res.json();
+  addCategoryChips.innerHTML = "";
+  addCategorySection.classList.toggle("hidden", categories.length === 0);
+  const existing = new Set(categories.map((c) => c.id));
+  for (const id of [...addSelectedCategories]) if (!existing.has(id)) addSelectedCategories.delete(id);
+  for (const c of categories) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip" + (addSelectedCategories.has(c.id) ? " active" : "");
+    chip.textContent = c.name;
+    chip.addEventListener("click", () => {
+      if (addSelectedCategories.has(c.id)) addSelectedCategories.delete(c.id); else addSelectedCategories.add(c.id);
+      chip.classList.toggle("active");
+    });
+    addCategoryChips.appendChild(chip);
+  }
+}
+
+async function openAddModal(prefill) {
+  if (addRunning) {
+    addStepInput.classList.add("hidden");
+    addStepProgress.classList.remove("hidden");
+    openModal(addModal);
+    return;
+  }
+  addStepInput.classList.remove("hidden");
+  addStepProgress.classList.add("hidden");
+  addCancel.classList.remove("hidden");
   addError.classList.add("hidden");
-  if (!addForm.classList.contains("hidden")) loadAddCategoryCheckboxes();
-});
+  if (prefill !== undefined) addUrl.value = prefill;
+  updateAddCount();
+  openModal(addModal);
+  if (window.matchMedia("(pointer: fine)").matches) addUrl.focus();
+  await loadAddCategoryChips();
+}
 
-addCancel.addEventListener("click", () => {
-  addForm.classList.add("hidden");
-  addUrl.value = "";
-});
+function setAddRow(li, state, title, sub, cover) {
+  const icons = { wait: "⏳", running: "🔄", ok: "✓", dup: "•", fail: "✗" };
+  li.className = "add-row " + state;
+  li.innerHTML = "";
+  if (cover) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = cover;
+    li.appendChild(img);
+  } else {
+    const icon = document.createElement("span");
+    icon.className = "add-row-icon";
+    icon.textContent = icons[state];
+    li.appendChild(icon);
+  }
+  const text = document.createElement("div");
+  text.className = "add-row-text";
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  const small = document.createElement("small");
+  small.textContent = sub;
+  text.append(strong, small);
+  li.appendChild(text);
+}
 
-const addSummary = document.getElementById("add-summary");
+async function runAdd(urls) {
+  addRunning = true;
+  addStepInput.classList.add("hidden");
+  addStepProgress.classList.remove("hidden");
+  addCancel.classList.add("hidden");
+  addDoneBtn.disabled = true;
+  addRetryBtn.classList.add("hidden");
+  addProgressList.innerHTML = "";
 
-addSubmit.addEventListener("click", async () => {
-  const urls = addUrl.value.split("\n").map((u) => u.trim()).filter(Boolean);
-  if (urls.length === 0) return;
-  const categoryIds = [...addCategoryCheckboxes.querySelectorAll("input:checked")].map((i) => parseInt(i.value, 10));
+  const rows = urls.map((url) => {
+    const li = document.createElement("li");
+    setAddRow(li, "wait", urlLabel(url), "En attente");
+    addProgressList.appendChild(li);
+    return li;
+  });
 
-  addSubmit.disabled = true;
-  addError.classList.add("hidden");
-  addSummary.classList.add("hidden");
-
-  let success = 0;
-  const failures = [];
+  const categoryIds = [...addSelectedCategories];
+  let added = 0;
+  let already = 0;
+  const failed = [];
 
   for (let i = 0; i < urls.length; i++) {
-    addSubmit.textContent = urls.length > 1 ? `Ajout ${i + 1}/${urls.length}...` : "Ajout...";
+    addSummary.textContent = `Ajout en cours… ${i + 1}/${urls.length}`;
+    setAddRow(rows[i], "running", urlLabel(urls[i]), "Récupération en cours…");
+    rows[i].scrollIntoView({ block: "nearest" });
     try {
       const res = await fetch("/api/series", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urls[i], category_ids: categoryIds }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Erreur inconnue");
-      success++;
+      let data = {};
+      try { data = await res.json(); } catch (e) { /* réponse non JSON */ }
+      if (res.status === 409) {
+        already++;
+        setAddRow(rows[i], "dup", urlLabel(urls[i]), "Déjà dans ta bibliothèque");
+        continue;
+      }
+      if (!res.ok) throw new Error(data.detail || `Erreur ${res.status}`);
+      added++;
+      const chapter = data.last_chapter_number ? `Chapitre ${data.last_chapter_number}` : "Ajoutée";
+      setAddRow(rows[i], "ok", data.title || urlLabel(urls[i]), chapter, data.cover_url);
     } catch (e) {
-      failures.push(`${urls[i]} : ${e.message}`);
+      failed.push(urls[i]);
+      setAddRow(rows[i], "fail", urlLabel(urls[i]), e.message);
     }
   }
 
-  addSubmit.disabled = false;
-  addSubmit.textContent = "Ajouter";
-
-  if (failures.length === 0) {
-    addUrl.value = "";
-    addForm.classList.add("hidden");
-  } else {
-    addSummary.textContent = `${success} ajoutée(s), ${failures.length} échec(s) :\n` + failures.join("\n");
-    addSummary.classList.remove("hidden");
-  }
+  addRunning = false;
+  addFailedUrls = failed;
+  const parts = [];
+  if (added) parts.push(`${added} ajoutée${added > 1 ? "s" : ""}`);
+  if (already) parts.push(`${already} déjà présente${already > 1 ? "s" : ""}`);
+  if (failed.length) parts.push(`${failed.length} échec${failed.length > 1 ? "s" : ""}`);
+  addSummary.textContent = parts.join(" · ");
+  addDoneBtn.disabled = false;
+  addRetryBtn.classList.toggle("hidden", failed.length === 0);
 
   loadGenreSelect();
   loadStatuses();
   loadCategoryTabs();
   loadLibrary();
+}
+
+addBtn.addEventListener("click", () => openAddModal());
+addCancel.addEventListener("click", () => closeModal(addModal));
+addModal.addEventListener("click", (e) => { if (e.target === addModal && !addRunning) closeModal(addModal); });
+addUrl.addEventListener("input", () => { addError.classList.add("hidden"); updateAddCount(); });
+
+addPasteBtn.addEventListener("click", async () => {
+  try {
+    const text = (await navigator.clipboard.readText()).trim();
+    if (!text) throw new Error("vide");
+    addUrl.value = addUrl.value.trim() ? addUrl.value.trim() + "\n" + text : text;
+    addError.classList.add("hidden");
+    updateAddCount();
+  } catch (e) {
+    addError.textContent = "Impossible de lire le presse-papiers : fais un appui long dans la zone de texte, puis « Coller ».";
+    addError.classList.remove("hidden");
+  }
 });
 
+addSubmit.addEventListener("click", () => {
+  const { valid } = extractUrls(addUrl.value);
+  if (valid.length === 0) return;
+  addUrl.value = "";
+  runAdd(valid);
+});
+
+addRetryBtn.addEventListener("click", () => runAdd(addFailedUrls));
+
+addDoneBtn.addEventListener("click", () => {
+  addUrl.value = addFailedUrls.join("\n");
+  closeModal(addModal);
+});
+
+// ----- Retour par balayage vers la droite (fiche série et popups) -----
+let swipeStart = null;
+
+document.addEventListener("touchstart", (e) => {
+  swipeStart = null;
+  if (!layers.length || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  if (t.clientX > window.innerWidth * 0.4) return;
+  if (e.target.closest("input, textarea, select")) return;
+  swipeStart = { x: t.clientX, y: t.clientY };
+}, { passive: true });
+
+document.addEventListener("touchend", (e) => {
+  if (!swipeStart) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - swipeStart.x;
+  const dy = t.clientY - swipeStart.y;
+  const fromEdge = swipeStart.x <= 24;
+  swipeStart = null;
+  if (dx < 80 || Math.abs(dy) > dx * 0.5 || !layers.length) return;
+  if (fromEdge) {
+    // Depuis le bord, le navigateur gère parfois déjà le geste (popstate) : on vérifie avant d'agir.
+    const before = lastPopAt;
+    setTimeout(() => { if (lastPopAt === before && layers.length) history.back(); }, 350);
+  } else {
+    history.back();
+  }
+}, { passive: true });
+
+document.addEventListener("touchcancel", () => { swipeStart = null; }, { passive: true });
+
 async function init() {
+  // Un rechargement peut laisser une entrée d'historique orpheline : on repart d'une base propre.
+  const shared = new URLSearchParams(location.search);
+  const sharedText = [shared.get("url"), shared.get("text"), shared.get("title")].filter(Boolean).join("\n");
+  history.replaceState(null, "", location.pathname);
+
   const saved = getSavedFilters();
   if (saved.sort) sortSelect.value = saved.sort;
   if (saved.search) searchInput.value = saved.search;
@@ -897,6 +1276,9 @@ async function init() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
+
+  // Lien partagé depuis une autre appli (menu « Partager » d'Android) : on ouvre la popup pré-remplie.
+  if (sharedText) openAddModal(sharedText);
 }
 
 init();

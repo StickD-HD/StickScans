@@ -68,6 +68,10 @@ class AnilistTokenRequest(BaseModel):
     token: str
 
 
+class AnilistClientIdRequest(BaseModel):
+    client_id: str
+
+
 class AnilistLinkRequest(BaseModel):
     anilist_id: int
     title: str
@@ -274,16 +278,42 @@ def get_stats():
 
 @app.get("/api/settings/anilist")
 def get_anilist_setting():
-    configured = database.get_setting("anilist_token") is not None
-    return {
-        "configured": configured,
-        "score_format": anilist.get_score_format() if configured else None,
-    }
+    return anilist.get_status()
 
 
 @app.post("/api/settings/anilist")
 def set_anilist_setting(payload: AnilistTokenRequest):
-    database.set_setting("anilist_token", payload.token.strip())
+    try:
+        return anilist.save_token(payload.token)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
+
+
+@app.delete("/api/settings/anilist")
+def delete_anilist_setting():
+    anilist.remove_token()
+    return anilist.get_status()
+
+
+@app.post("/api/settings/anilist/check")
+def check_anilist_setting():
+    try:
+        return anilist.check_token()
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
+
+
+@app.post("/api/settings/anilist/client-id")
+def set_anilist_client_id(payload: AnilistClientIdRequest):
+    client_id = payload.client_id.strip()
+    if client_id and not client_id.isdigit():
+        raise HTTPException(400, "L'ID du client AniList est un nombre")
+    if client_id:
+        database.set_setting("anilist_client_id", client_id)
+    else:
+        database.delete_setting("anilist_client_id")
     return {"ok": True}
 
 

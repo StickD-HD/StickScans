@@ -135,19 +135,34 @@ header h1 { font-size: 1.2rem; margin: 0; }
 #add-btn { background: var(--accent); color: #06101F; }
 #refresh-status-text { font-size: 0.7rem; color: var(--muted); }
 
-/* --- Formulaire d'ajout --- */
-#add-form {
-  display: flex; flex-direction: column; gap: 10px;
-  margin: 0 18px 14px; padding: 14px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
-}
-#add-form textarea { resize: vertical; }
-#add-category-checkboxes { display: flex; flex-wrap: wrap; gap: 10px; }
-#add-form > button { align-self: flex-start; }
-#add-submit { background: var(--accent); color: #06101F; }
+/* --- Popup d'ajout --- */
 .error { color: var(--error); font-size: 0.8rem; margin: 0; }
-#add-summary { white-space: pre-line; font-size: 0.78rem; color: var(--muted); }
 .hidden { display: none !important; }
+.sheet-handle { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: -8px auto 14px; }
+#add-step-input, #add-step-progress { display: flex; flex-direction: column; gap: 12px; }
+#add-url { width: 100%; resize: none; font-size: 0.82rem; }
+.add-input-row { display: flex; align-items: center; gap: 10px; }
+.mini-btn { padding: 6px 12px; font-size: 0.74rem; background: var(--surface); border-color: var(--border); }
+#add-count { font-size: 0.74rem; }
+#add-count.warn { color: var(--error); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.chip { background: var(--surface); border: 1px solid var(--border); color: var(--muted); font-size: 0.78rem; padding: 7px 13px; }
+.chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+#add-submit, #add-done-btn { background: var(--accent); color: #06101F; padding: 13px; font-size: 0.9rem; }
+#add-submit:disabled, #add-done-btn:disabled { background: var(--surface); color: var(--muted); }
+#add-cancel { width: 100%; margin-top: 10px; background: transparent; color: var(--muted); }
+#add-progress-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 44vh; overflow-y: auto; }
+.add-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.add-row img { width: 30px; aspect-ratio: 2/3; object-fit: cover; border-radius: 4px; background: var(--surface-high); flex-shrink: 0; }
+.add-row-icon { width: 30px; text-align: center; font-size: 1.05rem; flex-shrink: 0; }
+.add-row-text { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.add-row-text strong { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.add-row-text small { font-size: 0.7rem; color: var(--muted); overflow-wrap: anywhere; }
+.add-row.running .add-row-icon { animation: spin 1s linear infinite; }
+.add-row.ok { border-color: var(--accent2); }
+.add-row.fail { border-color: var(--error); }
+.add-row.fail small { color: var(--error); }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* --- Catégories --- */
 #category-bar { display: flex; align-items: center; gap: 8px; padding: 0 18px 12px; overflow-x: auto; }
@@ -245,19 +260,19 @@ main#library { padding: 0 18px; }
 .card .chapter { font-size: 0.66rem; color: var(--muted); }
 
 /* --- Modales --- */
-#category-modal, #filter-modal, #anilist-modal, #series-category-modal {
+#category-modal, #filter-modal, #anilist-modal, #series-category-modal, #add-modal {
   position: fixed; inset: 0; background: rgba(4, 7, 14, 0.72);
   backdrop-filter: blur(4px);
   display: flex; align-items: flex-end; justify-content: center; z-index: 50;
 }
-#category-modal-content, #filter-modal-content, #anilist-modal-content, #series-category-modal-content {
+#category-modal-content, #filter-modal-content, #anilist-modal-content, #series-category-modal-content, #add-modal-content {
   background: var(--surface-high); border: 1px solid var(--border); border-bottom: none;
   border-radius: 22px 22px 0 0;
   padding: 22px 20px calc(22px + env(safe-area-inset-bottom, 0px));
   width: 100%; max-width: 480px;
   max-height: 80vh; overflow-y: auto;
 }
-#category-modal-content h2, #filter-modal-content h2, #anilist-modal-content h2, #series-category-modal-content h2 { margin: 0 0 14px; font-size: 1.05rem; }
+#category-modal-content h2, #filter-modal-content h2, #anilist-modal-content h2, #series-category-modal-content h2, #add-modal-content h2 { margin: 0 0 14px; font-size: 1.05rem; }
 #category-manage-list { list-style: none; margin: 0 0 14px; padding: 0; }
 .category-manage-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
 .category-manage-row input { flex: 1; }
@@ -399,3 +414,28 @@ main#library { padding: 0 18px; }
 }
 .stat-box strong { font-size: 1.2rem; color: var(--accent); }
 .stat-box span { font-size: 0.66rem; color: var(--muted); }
+
+/* --- Réglages AniList --- */
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.settings-actions button { flex: 1; min-width: 0; }
+#anilist-connect-form { display: flex; flex-direction: column; gap: 4px; }
+.danger-btn { background: transparent; color: var(--error); border-color: var(--error); }
+.anilist-account { display: flex; align-items: center; gap: 12px; }
+.anilist-account img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; background: var(--surface-high); }
+.anilist-account-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.anilist-account-info strong { font-size: 0.95rem; }
+#anilist-expiry.warn { color: var(--error); }
+#anilist-token-alert { margin-top: 10px; }
+#anilist-help { margin-bottom: 12px; font-size: 0.8rem; color: var(--muted); }
+#anilist-help summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: 4px 0; }
+#anilist-help ol { padding-left: 18px; line-height: 1.6; }
+#anilist-help li { margin-bottom: 8px; }
+#anilist-help a { color: var(--accent); }
+#anilist-help code { background: var(--surface-high); padding: 2px 6px; border-radius: 6px; font-size: 0.74rem; overflow-wrap: anywhere; }
+#anilist-help input { width: 100%; margin-top: 6px; }
+#anilist-authorize-link { display: inline-flex; padding: 8px 14px; margin-bottom: 4px; background: var(--accent2-soft); color: var(--accent2) !important; }
+.action-btn-link.disabled { opacity: 0.4; pointer-events: none; }
+#anilist-authorize-link { border: 1px solid var(--accent2); border-radius: var(--radius-pill); text-decoration: none; font-weight: 600; }
+
+/* --- Retour par glissement : pas de rebond horizontal --- */
+html, body { overscroll-behavior-x: none; }

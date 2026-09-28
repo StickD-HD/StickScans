@@ -43,15 +43,6 @@
       </div>
     </header>
 
-    <div id="add-form" class="hidden">
-      <textarea id="add-url" rows="3" placeholder="Un ou plusieurs liens scan-manga.com, un par ligne"></textarea>
-      <div id="add-category-checkboxes"></div>
-      <button id="add-submit">Ajouter</button>
-      <button id="add-cancel">Annuler</button>
-      <p id="add-error" class="error hidden"></p>
-      <p id="add-summary" class="hidden"></p>
-    </div>
-
     <div id="category-bar">
       <div id="category-tabs"></div>
       <button id="manage-categories-btn" title="Gérer les catégories">⚙</button>
@@ -91,11 +82,42 @@
     <main id="settings-main">
       <section class="settings-section">
         <h2>AniList</h2>
-        <label>Jeton d'accès AniList
-          <input id="anilist-token-input" type="password" placeholder="Colle ton jeton ici">
-        </label>
-        <p id="anilist-status" class="section-label"></p>
-        <button id="anilist-token-save">Enregistrer</button>
+
+        <div id="anilist-connected" class="hidden">
+          <div class="anilist-account">
+            <img id="anilist-avatar" alt="" class="hidden">
+            <div class="anilist-account-info">
+              <strong id="anilist-username"></strong>
+              <span id="anilist-expiry" class="section-label"></span>
+            </div>
+          </div>
+          <p id="anilist-token-alert" class="error hidden"></p>
+          <div class="settings-actions">
+            <button id="anilist-check-btn">Vérifier</button>
+            <button id="anilist-change-btn">Changer le jeton</button>
+            <button id="anilist-disconnect-btn" class="danger-btn">Déconnecter</button>
+          </div>
+        </div>
+
+        <div id="anilist-connect-form" class="hidden">
+          <details id="anilist-help">
+            <summary>Comment obtenir un jeton ?</summary>
+            <ol>
+              <li>Sur <a href="https://anilist.co/settings/developer" target="_blank" rel="noopener">anilist.co/settings/developer</a>, clique sur « Create New Client » (nom au choix).</li>
+              <li>Comme « Redirect URL », mets : <code id="anilist-redirect-url">https://anilist.co/api/v2/oauth/pin</code> <button id="anilist-copy-redirect" class="mini-btn" type="button">Copier</button></li>
+              <li>Recopie ici le numéro <em>ID</em> du client : <input id="anilist-client-id-input" type="text" inputmode="numeric" placeholder="ex : 12345"></li>
+              <li><a id="anilist-authorize-link" class="action-btn-link disabled" target="_blank" rel="noopener">Ouvrir la page d'autorisation AniList</a> puis copie le jeton affiché et colle-le ci-dessous.</li>
+            </ol>
+          </details>
+          <label>Jeton d'accès AniList
+            <input id="anilist-token-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Colle ton jeton ici">
+          </label>
+          <p id="anilist-token-error" class="error hidden"></p>
+          <div class="settings-actions">
+            <button id="anilist-token-save">Connecter</button>
+            <button id="anilist-token-cancel" class="hidden">Annuler</button>
+          </div>
+        </div>
       </section>
       <section class="settings-section">
         <h2>Catégories</h2>
@@ -223,6 +245,39 @@
     <main>
       <ul id="chapters-list"></ul>
     </main>
+  </div>
+
+  <div id="add-modal" class="hidden">
+    <div id="add-modal-content">
+      <div class="sheet-handle"></div>
+      <h2>Ajouter des séries</h2>
+
+      <div id="add-step-input">
+        <p class="section-label">Colle un ou plusieurs liens de pages série scan-manga.com.</p>
+        <textarea id="add-url" rows="4" placeholder="https://www.scan-manga.com/..." autocapitalize="off" spellcheck="false"></textarea>
+        <div class="add-input-row">
+          <button id="add-paste-btn" class="mini-btn" type="button">📋 Coller</button>
+          <span id="add-count" class="section-label"></span>
+        </div>
+        <div id="add-category-section" class="hidden">
+          <span class="section-label">Ajouter aussi dans :</span>
+          <div id="add-category-chips" class="chips"></div>
+        </div>
+        <p id="add-error" class="error hidden"></p>
+        <button id="add-submit" disabled>Ajouter</button>
+      </div>
+
+      <div id="add-step-progress" class="hidden">
+        <ul id="add-progress-list"></ul>
+        <p id="add-summary" class="section-label"></p>
+        <div class="settings-actions">
+          <button id="add-retry-btn" class="hidden">Réessayer les échecs</button>
+          <button id="add-done-btn" disabled>Terminer</button>
+        </div>
+      </div>
+
+      <button id="add-cancel">Fermer</button>
+    </div>
   </div>
 
   <div id="anilist-modal" class="hidden">
