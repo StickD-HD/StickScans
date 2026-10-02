@@ -8,6 +8,11 @@ services:
       - ./data:/app/data
     environment:
       - BYPARR_URL=http://byparr:8191/v1
+      # Authentification : laisse AUTH_PASSWORD vide pour la désactiver.
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      # Passe à true si l'app est servie en HTTPS (reverse proxy).
+      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
     depends_on:
       - byparr
     restart: unless-stopped

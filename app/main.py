@@ -1,15 +1,16 @@
 import logging
+from urllib.parse import quote
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import anilist, database
+from . import anilist, auth, database
 from .backup import run_backup
 from .byparr_client import ByparrError
 from .scraper import check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
@@ -25,6 +26,10 @@ scheduler = BackgroundScheduler()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.init_db()
+    if auth.is_enabled():
+        logger.info("Authentification activée (utilisateur : %s)", auth.AUTH_USERNAME)
+    else:
+        logger.warning("AUTH_PASSWORD non défini : l'application est accessible SANS authentification")
     run_backup()
     scheduler.add_job(check_all_series, "interval", hours=1, id="check_all_series")
     scheduler.add_job(run_backup, CronTrigger(hour=3, minute=0), id="daily_backup")
@@ -35,6 +40,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Stickscans", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def require_auth(request: Request, call_next):
+    if not auth.is_enabled() or request.url.path in auth.PUBLIC_PATHS:
+        return await call_next(request)
+    if auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)):
+        return await call_next(request)
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": "Authentification requise"}, status_code=401)
+    target = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+    return RedirectResponse(f"/login?next={quote(target, safe='')}", status_code=303)
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    next: str | None = None
 
 
 class AddSeriesRequest(BaseModel):
@@ -83,6 +106,51 @@ class AnilistUpdateRequest(BaseModel):
     score: float | None = None
     start_date: str | None = None
     end_date: str | None = None
+
+
+@app.get("/login")
+def login_page(request: Request):
+    if not auth.is_enabled() or auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)):
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(STATIC_DIR / "login.html")
+
+
+@app.post("/api/auth/login")
+def login(payload: LoginRequest, request: Request, response: Response):
+    if not auth.is_enabled():
+        return {"ok": True, "next": "/"}
+    ip = request.client.host if request.client else "inconnu"
+    if auth.is_rate_limited(ip):
+        raise HTTPException(429, "Trop de tentatives, réessaie dans quelques minutes")
+    if not auth.check_credentials(payload.username, payload.password):
+        auth.register_failure(ip)
+        logger.warning("Échec de connexion depuis %s", ip)
+        raise HTTPException(401, "Identifiant ou mot de passe incorrect")
+    auth.clear_failures(ip)
+    response.set_cookie(
+        auth.COOKIE_NAME,
+        auth.create_session_token(),
+        max_age=auth.SESSION_DAYS * 86400,
+        httponly=True,
+        samesite="lax",
+        secure=auth.COOKIE_SECURE,
+        path="/",
+    )
+    return {"ok": True, "next": auth.safe_next_url(payload.next)}
+
+
+@app.post("/api/auth/logout")
+def logout(response: Response):
+    response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request):
+    return {
+        "enabled": auth.is_enabled(),
+        "authenticated": (not auth.is_enabled()) or auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)),
+    }
 
 
 @app.get("/api/series")

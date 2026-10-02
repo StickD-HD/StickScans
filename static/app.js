@@ -1,3 +1,26 @@
+// --- Authentification : si la session expire, on renvoie vers la page de connexion ---
+const _originalFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const res = await _originalFetch(...args);
+  if (res.status === 401 && !String(args[0]).startsWith("/api/auth/")) {
+    location.href = "/login?next=" + encodeURIComponent(location.pathname + location.search);
+  }
+  return res;
+};
+
+const authSection = document.getElementById("auth-section");
+const logoutBtn = document.getElementById("logout-btn");
+_originalFetch("/api/auth/status")
+  .then((r) => r.json())
+  .then((status) => { if (status.enabled && authSection) authSection.classList.remove("hidden"); })
+  .catch(() => {});
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", async () => {
+    await _originalFetch("/api/auth/logout", { method: "POST" });
+    location.href = "/login";
+  });
+}
+
 const navButtons = document.querySelectorAll(".nav-btn");
 const libraryView = document.getElementById("library-view");
 const updatesView = document.getElementById("updates-view");

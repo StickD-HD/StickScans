@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connexion · Stickscans</title>
+<meta name="theme-color" content="#080D18">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .login-wrap { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login-card { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border);
+                border-radius: var(--radius-lg); padding: 24px; }
+  .login-card h1 { margin: 0 0 4px; font-size: 1.3rem; }
+  .login-card p { margin: 0 0 18px; color: var(--muted); font-size: 0.85rem; }
+  .login-card label { display: flex; flex-direction: column; gap: 6px; font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
+  .login-card input { width: 100%; }
+  .login-card button { width: 100%; margin-top: 4px; }
+  #login-error { color: var(--error); font-size: 0.85rem; min-height: 1.2em; margin: 8px 0 0; }
+</style>
+</head>
+<body>
+  <div class="login-wrap">
+    <form id="login-form" class="login-card">
+      <h1>Stickscans</h1>
+      <p>Connecte-toi pour accéder à ta bibliothèque.</p>
+      <label>Identifiant
+        <input id="login-username" name="username" type="text" autocomplete="username" autocapitalize="none" required>
+      </label>
+      <label>Mot de passe
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button id="login-submit" type="submit">Se connecter</button>
+      <p id="login-error" role="alert"></p>
+    </form>
+  </div>
+  <script>
+    const form = document.getElementById("login-form");
+    const errorEl = document.getElementById("login-error");
+    const submitBtn = document.getElementById("login-submit");
+    const next = new URLSearchParams(location.search).get("next") || "/";
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.textContent = "";
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("login-username").value,
+            password: document.getElementById("login-password").value,
+            next,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          location.replace(data.next || "/");
+          return;
+        }
+        errorEl.textContent = data.detail || "Échec de la connexion";
+      } catch (err) {
+        errorEl.textContent = "Impossible de joindre le serveur";
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
