@@ -44,7 +44,7 @@ app = FastAPI(title="Stickscans", lifespan=lifespan)
 
 @app.middleware("http")
 async def require_auth(request: Request, call_next):
-    if not auth.is_enabled() or request.url.path in auth.PUBLIC_PATHS:
+    if not auth.is_enabled() or request.url.path in auth.PUBLIC_PATHS or request.url.path.startswith(auth.PUBLIC_PREFIXES):
         return await call_next(request)
     if auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)):
         return await call_next(request)

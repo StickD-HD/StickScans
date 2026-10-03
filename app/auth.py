@@ -45,6 +45,7 @@ PUBLIC_PATHS = {
     "/sw.js",
     "/static/style.css",
 }
+PUBLIC_PREFIXES = ("/static/icons/",)
 
 
 def is_enabled() -> bool:
