@@ -278,6 +278,11 @@ def link_series(series_id: int, media_id: int, title: str):
     try:
         entry = fetch_entry(media_id)
         database.set_series_anilist_data(series_id, **entry)
+        # Chapitres déjà lus dans l'appli : on les envoie tout de suite, mais seulement s'ils
+        # sont en avance sur AniList (on ne fait jamais reculer une progression existante).
+        local_progress = database.get_max_read_chapter_number(series_id)
+        if local_progress and _token() and local_progress > (entry.get("progress") or 0):
+            push_update(series_id, status=None if entry.get("status") else "CURRENT", progress=local_progress)
     except Exception as e:
         database.set_series_anilist_error(series_id, str(e))
         logger.error("Échec de récupération de la fiche AniList pour %s : %s", title, e)

@@ -309,7 +309,7 @@ main#library { padding: 0 18px; }
 #detail-meta, #detail-author, #detail-editor, #detail-team { font-size: 0.78rem; color: var(--muted); }
 
 /* --- Rangée d'actions : AniList / Catégorie / Source --- */
-#detail-actions { display: flex; gap: 8px; margin: 14px 0 0; }
+#detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
 #detail-actions button, #detail-actions .action-btn-link {
   flex: 1; text-align: center; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-pill); font-weight: 600;
@@ -317,7 +317,7 @@ main#library { padding: 0 18px; }
   display: flex; align-items: center; justify-content: center; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
-#anilist-action-btn.linked { background: var(--accent2-soft); color: var(--accent2); border-color: var(--accent2); }
+#anilist-action-btn.linked { background: var(--accent2-soft); color: var(--accent2); border-color: var(--accent2); flex: 1 1 100%; }
 
 #detail-synopsis-wrap { position: relative; margin: 16px 0 10px; }
 #detail-synopsis {
@@ -361,7 +361,15 @@ main#library { padding: 0 18px; }
 .anilist-result-row span { font-size: 0.8rem; }
 
 #anilist-linked-title { color: var(--accent2); font-weight: 700; }
-.anilist-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.anilist-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+.anilist-fields > label { min-width: 0; }
+.anilist-fields input, .anilist-fields select { width: 100%; min-width: 0; max-width: 100%; }
+/* iOS Safari : un champ date garde sa largeur native (et dépasse) tant que l'apparence native est active */
+.anilist-fields input[type="date"] {
+  -webkit-appearance: none; appearance: none;
+  display: block; min-height: 42px; text-align: left;
+}
+.anilist-fields input[type="date"]::-webkit-date-and-time-value { text-align: left; min-width: 0; }
 .anilist-fields label { font-size: 0.72rem; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
 #anilist-save-btn { background: var(--accent2); color: #04211D; margin-right: 8px; }
 #anilist-unlink-btn { background: transparent; color: var(--muted); }

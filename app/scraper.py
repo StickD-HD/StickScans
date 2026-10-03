@@ -2,6 +2,22 @@
 Logique de vérification : appelle Byparr, parse, met à jour la base (métadonnées + chapitres).
 Garde aussi un état de progression en mémoire, consultable via get_progress().
 """
+from urllib.parse import urlparse
+
+SCAN_MANGA_HOSTS = {"scan-manga.com", "www.scan-manga.com", "m.scan-manga.com"}
+
+
+def normalize_series_url(url: str) -> str | None:
+    """Accepte les liens normaux et mobiles (m.) de scan-manga.com et les ramène à la version www.
+    Renvoie None si ce n'est pas un lien scan-manga.com."""
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in ("http", "https") or (parsed.hostname or "").lower() not in SCAN_MANGA_HOSTS:
+        return None
+    if not parsed.path or parsed.path == "/":
+        return None
+    return "https://www.scan-manga.com" + parsed.path + (f"?{parsed.query}" if parsed.query else "")
+
+
 import time
 import random
 import logging

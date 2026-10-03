@@ -893,6 +893,7 @@ editCancelBtn.addEventListener("click", () => editForm.classList.add("hidden"));
 function renderAnilistSection(s) {
   if (s.anilist_id) {
     anilistActionBtn.textContent = "✓ " + (s.anilist_title || "AniList");
+    anilistActionBtn.title = s.anilist_title || "";
     anilistActionBtn.classList.add("linked");
     anilistActionBtn.dataset.linked = "1";
     anilistLinkedTitle.textContent = s.anilist_title || s.anilist_id;
@@ -1050,7 +1051,7 @@ function extractUrls(text) {
   const seen = new Set();
   const valid = [];
   for (let u of text.match(/https?:\/\/[^\s"'<>]+/g) || []) {
-    u = u.replace(/[),.;]+$/, "").replace(/^https?:\/\/(www\.)?scan-manga\.com/i, "https://www.scan-manga.com");
+    u = u.replace(/[),.;]+$/, "").replace(/^https?:\/\/(www\.|m\.)?scan-manga\.com/i, "https://www.scan-manga.com");
     if (u.startsWith(SCAN_MANGA_PREFIX) && !seen.has(u)) {
       seen.add(u);
       valid.push(u);

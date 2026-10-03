@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from . import anilist, auth, database
 from .backup import run_backup
 from .byparr_client import ByparrError
-from .scraper import check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
+from .scraper import normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("manhwa-tracker")
@@ -237,8 +237,8 @@ def unlock_field(series_id: int, field: str):
 
 @app.post("/api/series")
 def add_series(payload: AddSeriesRequest):
-    url = payload.url.strip()
-    if not url.startswith("https://www.scan-manga.com/"):
+    url = normalize_series_url(payload.url)
+    if not url:
         raise HTTPException(400, "L'URL doit être une page série de scan-manga.com")
 
     if database.get_series_by_url(url):
