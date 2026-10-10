@@ -7,6 +7,7 @@ Accès à la base SQLite.
 - app_settings            : paramètres clé/valeur (jeton AniList, format de note, etc.)
 """
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -451,11 +452,18 @@ def set_chapters_read(chapter_ids: list[int], is_read: bool):
 
 def mark_read_up_to(series_id: int, number_float: float):
     with get_conn() as conn:
+        # Chapitres précédents : marqués "lus" (pour la progression) mais SANS entrée dans
+        # l'historique, sinon ajouter une série déjà lue y déversait tous les anciens chapitres.
+        conn.execute(
+            "UPDATE chapters SET is_read = 1 WHERE series_id = ? AND number_float < ?",
+            (series_id, number_float),
+        )
+        # Le chapitre réellement lu : lui seul est noté dans l'historique.
         conn.execute(
             """
             UPDATE chapters
             SET is_read = 1, read_at = COALESCE(read_at, datetime('now'))
-            WHERE series_id = ? AND number_float <= ?
+            WHERE series_id = ? AND number_float = ?
             """,
             (series_id, number_float),
         )
@@ -463,10 +471,8 @@ def mark_read_up_to(series_id: int, number_float: float):
 
 def mark_all_read(series_id: int):
     with get_conn() as conn:
-        conn.execute(
-            "UPDATE chapters SET is_read = 1, read_at = COALESCE(read_at, datetime('now')) WHERE series_id = ?",
-            (series_id,),
-        )
+        # "Tout marquer comme lu" = rattrapage : pas d'entrées dans l'historique.
+        conn.execute("UPDATE chapters SET is_read = 1 WHERE series_id = ?", (series_id,))
 
 
 # --- Mises à jour / Historique ---
@@ -492,12 +498,12 @@ def get_reading_history(limit: int = 200) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT c.id AS chapter_id, c.number, c.url, c.read_at,
+            SELECT c.id AS chapter_id, c.number, c.number_float, c.url, c.read_at,
                    s.id AS series_id, s.title AS series_title, s.cover_url AS series_cover
             FROM chapters c
             JOIN series s ON s.id = c.series_id
             WHERE c.read_at IS NOT NULL
-            ORDER BY c.read_at DESC
+            ORDER BY c.read_at DESC, c.number_float DESC
             LIMIT ?
             """,
             (limit,),
@@ -505,13 +511,42 @@ def get_reading_history(limit: int = 200) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def remove_from_history(chapter_ids: list[int]):
+    """Retire des entrées de l'historique. Les chapitres restent marqués comme lus."""
+    if not chapter_ids:
+        return
+    with get_conn() as conn:
+        placeholders = ",".join("?" for _ in chapter_ids)
+        conn.execute(f"UPDATE chapters SET read_at = NULL WHERE id IN ({placeholders})", chapter_ids)
+
+
 def clear_reading_history():
     with get_conn() as conn:
         conn.execute("UPDATE chapters SET read_at = NULL WHERE read_at IS NOT NULL")
 
 
-def get_reading_stats() -> dict:
+def get_reading_stats(tz_offset_minutes: int = 0) -> dict:
+    # tz_offset_minutes : décalage de l'utilisateur par rapport à UTC (Paris en été : +120),
+    # pour que les "jours" correspondent à ses vraies journées.
     with get_conn() as conn:
+        modifier = f"{tz_offset_minutes:+d} minutes"
+        day_rows = conn.execute(
+            "SELECT date(read_at, ?) AS d, COUNT(*) AS n FROM chapters WHERE read_at IS NOT NULL GROUP BY d",
+            (modifier,),
+        ).fetchall()
+        per_day = {r["d"]: r["n"] for r in day_rows}
+        today = (datetime.now(timezone.utc) + timedelta(minutes=tz_offset_minutes)).date()
+        last_7_days = [
+            {"date": (today - timedelta(days=i)).isoformat(), "count": per_day.get((today - timedelta(days=i)).isoformat(), 0)}
+            for i in range(6, -1, -1)
+        ]
+        # Jours d'affilée : on compte en arrière depuis aujourd'hui (ou hier si rien n'est encore lu aujourd'hui).
+        day = today if per_day.get(today.isoformat()) else today - timedelta(days=1)
+        streak_days = 0
+        while per_day.get(day.isoformat()):
+            streak_days += 1
+            day -= timedelta(days=1)
+
         chapters_this_week = conn.execute(
             "SELECT COUNT(*) FROM chapters WHERE read_at >= datetime('now', '-7 days')"
         ).fetchone()[0]
@@ -535,6 +570,8 @@ def get_reading_stats() -> dict:
             "total_read": total_read,
             "top_series_title": top_series["title"] if top_series else None,
             "top_series_count": top_series["read_count"] if top_series else 0,
+            "streak_days": streak_days,
+            "last_7_days": last_7_days,
         }
 
 

@@ -400,6 +400,18 @@ main#library { padding: 0 18px; }
 .update-row:active { opacity: 0.7; }
 .update-row img { width: 42px; aspect-ratio: 2/3; object-fit: cover; border-radius: 6px; background: var(--surface); }
 .update-row span { font-size: 0.85rem; }
+.update-time { display: block; margin-top: 3px; font-size: 0.74rem; color: var(--muted); }
+.update-row span { flex: 1; min-width: 0; }
+.history-remove-btn { background: none; border: none; color: var(--muted); font-size: 0.95rem; padding: 8px 10px; flex: none; }
+.history-remove-btn:active { color: var(--error); }
+.week-chart { flex-basis: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; }
+.week-title { font-size: 0.66rem; color: var(--muted); margin-bottom: 8px; text-align: center; }
+.week-bars { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; }
+.week-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
+.week-col em { font-style: normal; font-size: 0.66rem; color: var(--text); min-height: 0.9em; }
+.week-col i { width: 100%; max-width: 26px; border-radius: 4px; background: var(--border); display: block; }
+.week-col i.on { background: linear-gradient(180deg, var(--accent), var(--accent2)); }
+.week-col b { font-size: 0.66rem; color: var(--muted); font-weight: 600; }
 
 #history-view header { justify-content: space-between; }
 #clear-history-btn { background: var(--surface-high); font-size: 0.75rem; }

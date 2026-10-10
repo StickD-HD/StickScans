@@ -78,6 +78,10 @@ class BulkReadRequest(BaseModel):
     is_read: bool
 
 
+class HistoryRemoveRequest(BaseModel):
+    chapter_ids: list[int]
+
+
 class UpdateSeriesRequest(BaseModel):
     cover_url: str | None = None
     title: str | None = None
@@ -333,6 +337,12 @@ def list_history(limit: int = 200):
     return database.get_reading_history(limit=limit)
 
 
+@app.post("/api/history/remove")
+def remove_history_entries(payload: HistoryRemoveRequest):
+    database.remove_from_history(payload.chapter_ids)
+    return {"ok": True}
+
+
 @app.delete("/api/history")
 def clear_history():
     database.clear_reading_history()
@@ -340,8 +350,8 @@ def clear_history():
 
 
 @app.get("/api/stats")
-def get_stats():
-    return database.get_reading_stats()
+def get_stats(tz_offset: int = 0):
+    return database.get_reading_stats(tz_offset_minutes=tz_offset)
 
 
 @app.get("/api/settings/anilist")
