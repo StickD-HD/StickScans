@@ -18,6 +18,7 @@ def normalize_series_url(url: str) -> str | None:
     return "https://www.scan-manga.com" + parsed.path + (f"?{parsed.query}" if parsed.query else "")
 
 
+import os
 import time
 import random
 import logging
@@ -65,8 +66,10 @@ def format_duration(seconds: float) -> str:
     return f"{hours}h{minutes:02d}min"
 
 
-MIN_DELAY_SECONDS = 3
-MAX_DELAY_SECONDS = 8
+# Pause aléatoire entre deux séries (pour ne pas enchaîner les requêtes vers le site).
+# Réglable avec CHECK_MIN_DELAY_SECONDS / CHECK_MAX_DELAY_SECONDS (défaut : 3 à 8 s).
+MIN_DELAY_SECONDS = max(0.0, float(os.environ.get("CHECK_MIN_DELAY_SECONDS", "3")))
+MAX_DELAY_SECONDS = max(MIN_DELAY_SECONDS, float(os.environ.get("CHECK_MAX_DELAY_SECONDS", "8")))
 
 _progress_lock = threading.Lock()
 _progress = {

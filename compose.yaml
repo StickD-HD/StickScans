@@ -15,6 +15,10 @@ services:
       - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
       # Vérifications à xx:00 (celles de l'instance de ton ami sont à xx:30).
       - CHECK_OFFSET_MINUTES=0
+      # Pause entre deux séries pendant une vérification : 2 à 4 s (avant : 3 à 8 s).
+      # Pour revenir à l'ancien rythme, supprime ces deux lignes.
+      - CHECK_MIN_DELAY_SECONDS=2
+      - CHECK_MAX_DELAY_SECONDS=4
     depends_on:
       - byparr
     restart: unless-stopped
