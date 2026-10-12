@@ -1,5 +1,5 @@
 # Données locales : base SQLite + sauvegardes (propres à chaque installation)
-data/
+data*/
 *.db
 *.db-journal
 *.sqlite

@@ -508,6 +508,11 @@ async function loadChecks() {
   renderChecksList(await listRes.json());
 }
 
+document.getElementById("download-db-btn").addEventListener("click", () => {
+  const tzOffset = -new Date().getTimezoneOffset();
+  window.location.href = `/api/database/download?tz_offset=${tzOffset}`;
+});
+
 document.getElementById("open-checks-btn").addEventListener("click", () => {
   goToTopView("checks-view");
   navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === "settings-view"));

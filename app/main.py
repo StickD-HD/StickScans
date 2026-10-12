@@ -1,13 +1,19 @@
 import logging
+import os
+import sqlite3
+import tempfile
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 
 from . import anilist, auth, database
@@ -26,6 +32,8 @@ scheduler = BackgroundScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if auth.AUTH_REQUIRED and not auth.is_enabled():
+        raise RuntimeError("AUTH_REQUIRED=true mais AUTH_PASSWORD est vide : démarrage refusé (voir le fichier .env)")
     database.init_db()
     database.close_stale_check_runs()
     if auth.is_enabled():
@@ -33,10 +41,19 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("AUTH_PASSWORD non défini : l'application est accessible SANS authentification")
     run_backup()
-    scheduler.add_job(check_all_series, "interval", hours=1, id="check_all_series")
+    # CHECK_INTERVAL_HOURS : fréquence des vérifications (défaut : toutes les heures).
+    # CHECK_OFFSET_MINUTES : si défini, les vérifications tombent à cette minute pile de l'heure
+    # (ex. 30 => xx:30), pratique pour décaler deux instances qui partagent le même Byparr.
+    interval_hours = max(1, int(os.environ.get("CHECK_INTERVAL_HOURS", "1") or 1))
+    offset = os.environ.get("CHECK_OFFSET_MINUTES", "").strip()
+    if offset:
+        check_trigger = CronTrigger(hour="*" if interval_hours == 1 else f"*/{interval_hours}", minute=int(offset) % 60)
+    else:
+        check_trigger = IntervalTrigger(hours=interval_hours)
+    scheduler.add_job(check_all_series, check_trigger, id="check_all_series")
     scheduler.add_job(run_backup, CronTrigger(hour=3, minute=0), id="daily_backup")
     scheduler.start()
-    logger.info("Planificateur démarré (vérification toutes les heures, sauvegarde quotidienne à 3h)")
+    logger.info("Planificateur démarré (vérification : %s, sauvegarde quotidienne à 3h)", check_trigger)
     yield
     scheduler.shutdown()
 
@@ -125,7 +142,7 @@ def login_page(request: Request):
 def login(payload: LoginRequest, request: Request, response: Response):
     if not auth.is_enabled():
         return {"ok": True, "next": "/"}
-    ip = request.client.host if request.client else "inconnu"
+    ip = auth.client_ip(request)
     if auth.is_rate_limited(ip):
         raise HTTPException(429, "Trop de tentatives, réessaie dans quelques minutes")
     if not auth.check_credentials(payload.username, payload.password):
@@ -268,6 +285,30 @@ def add_series(payload: AddSeriesRequest):
 def refresh_all(background_tasks: BackgroundTasks):
     background_tasks.add_task(check_all_series, "manuel")
     return {"ok": True, "message": "Vérification lancée en arrière-plan"}
+
+
+@app.get("/api/database/download")
+def download_database(tz_offset: int = 0):
+    """Télécharge une copie cohérente de la base (même si l'appli écrit au même moment)."""
+    if not database.DB_PATH.exists():
+        raise HTTPException(404, "Base de données introuvable")
+    tmp = tempfile.NamedTemporaryFile(prefix="stickscans-", suffix=".db", delete=False)
+    tmp.close()
+    source = sqlite3.connect(database.DB_PATH)
+    target = sqlite3.connect(tmp.name)
+    try:
+        source.backup(target)  # copie intégrale et cohérente fournie par SQLite
+    finally:
+        target.close()
+        source.close()
+    local_now = datetime.now(timezone.utc) + timedelta(minutes=tz_offset)
+    filename = f"stickscans-{local_now:%Y-%m-%d_%H-%M}.db"
+    return FileResponse(
+        tmp.name,
+        media_type="application/octet-stream",
+        filename=filename,
+        background=BackgroundTask(os.remove, tmp.name),  # le fichier temporaire est supprimé après l'envoi
+    )
 
 
 @app.get("/api/checks/summary")

@@ -13,6 +13,8 @@ services:
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
       # Passe à true si l'app est servie en HTTPS (reverse proxy).
       - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
+      # Vérifications à xx:00 (celles de l'instance de ton ami sont à xx:30).
+      - CHECK_OFFSET_MINUTES=0
     depends_on:
       - byparr
     restart: unless-stopped

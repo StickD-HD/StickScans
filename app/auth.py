@@ -8,6 +8,8 @@ Configuration (variables d'environnement) :
                        générée et conservée dans data/auth_secret (les sessions survivent
                        aux redémarrages du conteneur).
 - AUTH_SESSION_DAYS  : durée d'une session en jours (défaut : 30).
+- AUTH_COOKIE_NAME   : nom du cookie de session. À changer si plusieurs instances tournent sur le
+                       même serveur (les cookies ne sont pas séparés par port).
 - AUTH_COOKIE_SECURE : "true" pour n'envoyer le cookie qu'en HTTPS (à activer derrière un
                        reverse proxy HTTPS).
 """
@@ -19,17 +21,26 @@ import logging
 import os
 import secrets
 import threading
+import ipaddress
 import time
 from pathlib import Path
 
 logger = logging.getLogger("manhwa-tracker.auth")
 
-COOKIE_NAME = "stickscans_session"
+COOKIE_NAME = os.environ.get("AUTH_COOKIE_NAME", "stickscans_session")
 
 AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "admin")
 AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "")
 SESSION_DAYS = int(os.environ.get("AUTH_SESSION_DAYS", "30"))
 COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
+
+# AUTH_REQUIRED=true : l'appli REFUSE de démarrer sans mot de passe (utile quand elle est exposée
+# sur internet : un oubli de .env ne doit jamais la laisser ouverte à tout le monde).
+AUTH_REQUIRED = os.environ.get("AUTH_REQUIRED", "false").lower() in ("1", "true", "yes")
+
+# TRUST_CF_CONNECTING_IP=true : derrière un tunnel Cloudflare, toutes les connexions arrivent du tunnel ;
+# la vraie adresse du visiteur est dans l'en-tête CF-Connecting-IP (posé par Cloudflare).
+TRUST_CF_CONNECTING_IP = os.environ.get("TRUST_CF_CONNECTING_IP", "false").lower() in ("1", "true", "yes")
 
 SECRET_PATH = Path(__file__).parent.parent / "data" / "auth_secret"
 
@@ -46,6 +57,17 @@ PUBLIC_PATHS = {
     "/static/style.css",
 }
 PUBLIC_PREFIXES = ("/static/icons/",)
+
+
+def client_ip(request) -> str:
+    """Adresse utilisée pour limiter les tentatives de connexion."""
+    if TRUST_CF_CONNECTING_IP:
+        raw = (request.headers.get("cf-connecting-ip") or "").split(",")[0].strip()
+        try:
+            return str(ipaddress.ip_address(raw))
+        except ValueError:
+            pass  # en-tête absent ou invalide : on retombe sur l'adresse de la connexion
+    return request.client.host if request.client else "inconnu"
 
 
 def is_enabled() -> bool:
