@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import anilist, auth, database
+from . import scraper as scraper_module
 from .backup import run_backup
 from .byparr_client import ByparrError
 from .scraper import normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
@@ -26,6 +27,7 @@ scheduler = BackgroundScheduler()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.init_db()
+    database.close_stale_check_runs()
     if auth.is_enabled():
         logger.info("Authentification activée (utilisateur : %s)", auth.AUTH_USERNAME)
     else:
@@ -264,8 +266,33 @@ def add_series(payload: AddSeriesRequest):
 
 @app.post("/api/series/refresh-all")
 def refresh_all(background_tasks: BackgroundTasks):
-    background_tasks.add_task(check_all_series)
+    background_tasks.add_task(check_all_series, "manuel")
     return {"ok": True, "message": "Vérification lancée en arrière-plan"}
+
+
+@app.get("/api/checks/summary")
+def checks_summary():
+    return database.get_check_summary()
+
+
+@app.get("/api/checks/log")
+def checks_log_file():
+    if not scraper_module.LOG_FILE.exists():
+        raise HTTPException(404, "Aucun journal pour l'instant")
+    return FileResponse(scraper_module.LOG_FILE, media_type="text/plain; charset=utf-8", filename="scrape.log")
+
+
+@app.get("/api/checks")
+def checks_list(limit: int = 60):
+    return database.list_check_runs(limit=min(max(limit, 1), 200))
+
+
+@app.get("/api/checks/{run_id}")
+def checks_detail(run_id: int):
+    run = database.get_check_run(run_id)
+    if not run:
+        raise HTTPException(404, "Vérification introuvable")
+    return run
 
 
 @app.get("/api/refresh-status")

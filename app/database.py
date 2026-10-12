@@ -65,6 +65,31 @@ CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS check_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    finished_at TEXT,
+    duration_seconds REAL,
+    trigger TEXT NOT NULL DEFAULT 'auto',
+    status TEXT NOT NULL DEFAULT 'en cours',
+    total INTEGER NOT NULL DEFAULT 0,
+    ok_count INTEGER NOT NULL DEFAULT 0,
+    error_count INTEGER NOT NULL DEFAULT 0,
+    new_chapters INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS check_run_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL REFERENCES check_runs(id) ON DELETE CASCADE,
+    series_id INTEGER,
+    series_title TEXT,
+    duration_seconds REAL,
+    ok INTEGER NOT NULL DEFAULT 1,
+    new_chapters TEXT,
+    error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_check_run_items_run ON check_run_items(run_id);
 """
 
 NEW_SERIES_COLUMNS = {
@@ -121,6 +146,114 @@ def init_db():
                 conn.execute(f"ALTER TABLE chapters ADD COLUMN {col} {coltype}")
         if is_first_migration:
             conn.execute("UPDATE chapters SET is_initial_fetch = 1")
+
+
+# --- Journal des vérifications (durées, erreurs) ---
+
+CHECK_LOG_RETENTION_DAYS = 30
+
+
+def start_check_run(trigger: str, total: int) -> int:
+    with get_conn() as conn:
+        cur = conn.execute("INSERT INTO check_runs (trigger, total) VALUES (?, ?)", (trigger, total))
+        return cur.lastrowid
+
+
+def add_check_item(run_id: int, series_id: int, title: str | None, duration: float, ok: bool,
+                   new_chapters: list[str], error: str | None):
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO check_run_items (run_id, series_id, series_title, duration_seconds, ok, new_chapters, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (run_id, series_id, title, round(duration, 2), 1 if ok else 0, ", ".join(new_chapters) or None, error),
+        )
+
+
+def finish_check_run(run_id: int, duration: float):
+    with get_conn() as conn:
+        counts = conn.execute(
+            """
+            SELECT COALESCE(SUM(ok), 0) AS ok_count, COUNT(*) - COALESCE(SUM(ok), 0) AS error_count
+            FROM check_run_items WHERE run_id = ?
+            """,
+            (run_id,),
+        ).fetchone()
+        new_total = sum(
+            len(r["new_chapters"].split(", "))
+            for r in conn.execute("SELECT new_chapters FROM check_run_items WHERE run_id = ? AND new_chapters IS NOT NULL", (run_id,))
+        )
+        conn.execute(
+            """
+            UPDATE check_runs
+            SET finished_at = datetime('now'), duration_seconds = ?, status = 'terminée',
+                ok_count = ?, error_count = ?, new_chapters = ?
+            WHERE id = ?
+            """,
+            (round(duration, 1), counts["ok_count"], counts["error_count"], new_total, run_id),
+        )
+        conn.execute(
+            f"DELETE FROM check_runs WHERE started_at < datetime('now', '-{CHECK_LOG_RETENTION_DAYS} days')"
+        )
+
+
+def close_stale_check_runs():
+    """Au démarrage : une vérification restée 'en cours' a été coupée par un redémarrage."""
+    with get_conn() as conn:
+        conn.execute("UPDATE check_runs SET status = 'interrompue' WHERE status = 'en cours'")
+
+
+def list_check_runs(limit: int = 60) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM check_runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_check_run(run_id: int) -> dict | None:
+    with get_conn() as conn:
+        run = conn.execute("SELECT * FROM check_runs WHERE id = ?", (run_id,)).fetchone()
+        if not run:
+            return None
+        items = conn.execute(
+            "SELECT * FROM check_run_items WHERE run_id = ? ORDER BY duration_seconds DESC", (run_id,)
+        ).fetchall()
+        return {**dict(run), "items": [dict(i) for i in items]}
+
+
+def get_check_summary() -> dict:
+    with get_conn() as conn:
+        last_run = conn.execute("SELECT * FROM check_runs ORDER BY id DESC LIMIT 1").fetchone()
+        done = conn.execute(
+            "SELECT id, started_at, duration_seconds, error_count, trigger FROM check_runs "
+            "WHERE status = 'terminée' AND trigger = 'auto' ORDER BY id DESC LIMIT 24"
+        ).fetchall()
+        done = list(reversed([dict(r) for r in done]))
+        avg_run = sum(r["duration_seconds"] for r in done) / len(done) if done else None
+        item_stats = conn.execute(
+            """
+            SELECT COUNT(*) AS n, AVG(i.duration_seconds) AS avg_s, COALESCE(SUM(1 - i.ok), 0) AS errors
+            FROM check_run_items i JOIN check_runs r ON r.id = i.run_id
+            WHERE r.started_at >= datetime('now', '-1 day')
+            """
+        ).fetchone()
+        slowest = conn.execute(
+            """
+            SELECT i.series_title, ROUND(AVG(i.duration_seconds), 1) AS avg_seconds, COUNT(*) AS checks
+            FROM check_run_items i JOIN check_runs r ON r.id = i.run_id
+            WHERE r.started_at >= datetime('now', '-7 days') AND i.series_title IS NOT NULL
+            GROUP BY i.series_id ORDER BY AVG(i.duration_seconds) DESC LIMIT 5
+            """
+        ).fetchall()
+        return {
+            "last_run": dict(last_run) if last_run else None,
+            "avg_run_seconds": round(avg_run, 1) if avg_run is not None else None,
+            "avg_series_seconds": round(item_stats["avg_s"], 1) if item_stats["avg_s"] is not None else None,
+            "checks_24h": item_stats["n"],
+            "errors_24h": item_stats["errors"],
+            "recent_runs": done,
+            "slowest_series": [dict(r) for r in slowest],
+        }
 
 
 # --- Genres (filtre, alimenté par le scraping) ---

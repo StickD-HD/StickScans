@@ -127,12 +127,29 @@
         <p class="section-label">Créer, renommer ou supprimer tes catégories.</p>
         <button id="manage-categories-btn-settings">Gérer les catégories</button>
       </section>
+      <section class="settings-section">
+        <h2>Vérifications</h2>
+        <p class="section-label">Durée, erreurs et détail de chaque mise à jour des séries.</p>
+        <button id="open-checks-btn">Voir le journal</button>
+      </section>
       <section id="auth-section" class="settings-section hidden">
         <h2>Session</h2>
         <p class="section-label">Te déconnecter de cet appareil.</p>
         <button id="logout-btn">Se déconnecter</button>
       </section>
     </main>
+  </div>
+
+  <div id="checks-view" class="hidden">
+    <header>
+      <button id="checks-back-btn">← Retour</button>
+      <h1>Vérifications</h1>
+      <button id="checks-refresh-btn" title="Actualiser">↻</button>
+    </header>
+    <div id="checks-summary"></div>
+    <div id="checks-extra"></div>
+    <main id="checks-list"></main>
+    <p class="checks-footer"><a class="action-btn-link" href="/api/checks/log" download="scrape.log">Télécharger le fichier log</a></p>
   </div>
 
   <div id="filter-modal" class="hidden">
