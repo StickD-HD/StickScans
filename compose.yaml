@@ -19,6 +19,10 @@ services:
       # Pour revenir à l'ancien rythme, supprime ces deux lignes.
       - CHECK_MIN_DELAY_SECONDS=2
       - CHECK_MAX_DELAY_SECONDS=4
+      # Partage avec l'instance de ton ami : ton instance garde une copie des pages récupérées,
+      # la sienne les réutilise (lecture seule) au lieu de redemander les séries en commun au site.
+      - SCRAPE_CACHE_MODE=write
+      - SCRAPE_CACHE_DIR=/app/data/scrape-cache
     depends_on:
       - byparr
     restart: unless-stopped

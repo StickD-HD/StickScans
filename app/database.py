@@ -87,7 +87,8 @@ CREATE TABLE IF NOT EXISTS check_run_items (
     duration_seconds REAL,
     ok INTEGER NOT NULL DEFAULT 1,
     new_chapters TEXT,
-    error TEXT
+    error TEXT,
+    source TEXT NOT NULL DEFAULT 'site'
 );
 CREATE INDEX IF NOT EXISTS idx_check_run_items_run ON check_run_items(run_id);
 """
@@ -146,6 +147,10 @@ def init_db():
                 conn.execute(f"ALTER TABLE chapters ADD COLUMN {col} {coltype}")
         if is_first_migration:
             conn.execute("UPDATE chapters SET is_initial_fetch = 1")
+        # Journal des vérifications : colonne « source » (site ou copie d'une autre instance)
+        existing_items = {row["name"] for row in conn.execute("PRAGMA table_info(check_run_items)")}
+        if "source" not in existing_items:
+            conn.execute("ALTER TABLE check_run_items ADD COLUMN source TEXT NOT NULL DEFAULT 'site'")
 
 
 # --- Journal des vérifications (durées, erreurs) ---
@@ -160,14 +165,14 @@ def start_check_run(trigger: str, total: int) -> int:
 
 
 def add_check_item(run_id: int, series_id: int, title: str | None, duration: float, ok: bool,
-                   new_chapters: list[str], error: str | None):
+                   new_chapters: list[str], error: str | None, source: str = "site"):
     with get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO check_run_items (run_id, series_id, series_title, duration_seconds, ok, new_chapters, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO check_run_items (run_id, series_id, series_title, duration_seconds, ok, new_chapters, error, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (run_id, series_id, title, round(duration, 2), 1 if ok else 0, ", ".join(new_chapters) or None, error),
+            (run_id, series_id, title, round(duration, 2), 1 if ok else 0, ", ".join(new_chapters) or None, error, source),
         )
 
 
@@ -232,7 +237,8 @@ def get_check_summary() -> dict:
         avg_run = sum(r["duration_seconds"] for r in done) / len(done) if done else None
         item_stats = conn.execute(
             """
-            SELECT COUNT(*) AS n, AVG(i.duration_seconds) AS avg_s, COALESCE(SUM(1 - i.ok), 0) AS errors
+            SELECT COUNT(*) AS n, AVG(CASE WHEN i.source = 'cache' THEN NULL ELSE i.duration_seconds END) AS avg_s,
+                   COALESCE(SUM(1 - i.ok), 0) AS errors, COALESCE(SUM(i.source = 'cache'), 0) AS from_cache
             FROM check_run_items i JOIN check_runs r ON r.id = i.run_id
             WHERE r.started_at >= datetime('now', '-1 day')
             """
@@ -241,7 +247,7 @@ def get_check_summary() -> dict:
             """
             SELECT i.series_title, ROUND(AVG(i.duration_seconds), 1) AS avg_seconds, COUNT(*) AS checks
             FROM check_run_items i JOIN check_runs r ON r.id = i.run_id
-            WHERE r.started_at >= datetime('now', '-7 days') AND i.series_title IS NOT NULL
+            WHERE r.started_at >= datetime('now', '-7 days') AND i.series_title IS NOT NULL AND i.source != 'cache'
             GROUP BY i.series_id ORDER BY AVG(i.duration_seconds) DESC LIMIT 5
             """
         ).fetchall()
@@ -251,6 +257,7 @@ def get_check_summary() -> dict:
             "avg_series_seconds": round(item_stats["avg_s"], 1) if item_stats["avg_s"] is not None else None,
             "checks_24h": item_stats["n"],
             "errors_24h": item_stats["errors"],
+            "from_cache_24h": item_stats["from_cache"],
             "recent_runs": done,
             "slowest_series": [dict(r) for r in slowest],
         }

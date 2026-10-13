@@ -25,7 +25,7 @@ import logging
 import threading
 from logging.handlers import RotatingFileHandler
 
-from . import database
+from . import database, scrape_cache
 from .byparr_client import fetch_html
 from .parse_series import parse_series_page
 
@@ -90,17 +90,39 @@ def _set_progress(**kwargs):
         _progress.update(kwargs)
 
 
-def _check(series: dict, run_id: int | None) -> dict:
-    """Vérifie une série, mesure la durée, l'enregistre dans le journal (base + fichier)."""
+def _check(series: dict, run_id: int | None, use_cache: bool = False) -> dict:
+    """Vérifie une série, mesure la durée, l'enregistre dans le journal (base + fichier).
+
+    use_cache : réutiliser la copie récente d'une autre instance (vérifications automatiques seulement ;
+    un clic manuel va toujours chercher la page sur le site)."""
     started = time.monotonic()
     title = series.get("title") or series["url"]
     new_numbers: list[str] = []
     error = None
+    source = "site"
+    cache_age = 0.0
     try:
-        html = fetch_html(series["url"])
-        parsed = parse_series_page(html)
+        html = None
+        if use_cache:
+            cached = scrape_cache.read(series["url"])
+            if cached:
+                html, cache_age = cached
+                source = "cache"
+        if html is None:
+            html = fetch_html(series["url"])
+        try:
+            parsed = parse_series_page(html)
+        except Exception:
+            if source != "cache":
+                raise
+            # copie illisible : on retente avec la vraie page du site
+            source = "site"
+            html = fetch_html(series["url"])
+            parsed = parse_series_page(html)
         title = parsed.get("title") or title
         new_numbers = [c["number"] for c in database.update_series_result(series["id"], parsed)]
+        if source == "site":
+            scrape_cache.write(series["url"], html)  # sans effet hors du mode « write »
     except Exception as e:  # une série en échec (réseau, Byparr, page illisible) ne doit pas bloquer les autres
         error = str(e) or e.__class__.__name__
         database.update_series_error(series["id"], error)
@@ -108,14 +130,17 @@ def _check(series: dict, run_id: int | None) -> dict:
 
     if error:
         checks_log.error("ERREUR   %7s  %s — %s", format_duration(duration), title, error)
+    elif source == "cache":
+        detail = f"chapitre(s) {', '.join(new_numbers)}" if new_numbers else "rien de nouveau"
+        checks_log.info("COPIE    %7s  %s — %s (copie de %d min, site non sollicité)", format_duration(duration), title, detail, round(cache_age / 60))
     elif new_numbers:
         checks_log.info("NOUVEAU  %7s  %s — chapitre(s) %s", format_duration(duration), title, ", ".join(new_numbers))
     else:
         checks_log.info("OK       %7s  %s — rien de nouveau", format_duration(duration), title)
 
     if run_id is not None:
-        database.add_check_item(run_id, series["id"], title, duration, error is None, new_numbers, error)
-    return {"ok": error is None, "duration": duration, "new": len(new_numbers)}
+        database.add_check_item(run_id, series["id"], title, duration, error is None, new_numbers, error, source)
+    return {"ok": error is None, "duration": duration, "new": len(new_numbers), "source": source}
 
 
 def check_one_series(series: dict) -> dict:
@@ -143,25 +168,30 @@ def check_all_series(trigger: str = "auto"):
         run_id = database.start_check_run(trigger, len(all_series))
         checks_log.info("=== Vérification [%s] : début, %d série(s) ===", trigger, len(all_series))
 
-        ok = errors = new_chapters = 0
+        ok = errors = new_chapters = from_cache = 0
         slowest = (0.0, "")
+        use_cache = trigger == "auto" and scrape_cache.MODE == "read"
+        scrape_cache.purge_old()
         for i, series in enumerate(all_series):
             _set_progress(current_title=series.get("title"))
-            result = _check(series, run_id)
+            result = _check(series, run_id, use_cache=use_cache)
+            from_cache += 1 if result["source"] == "cache" else 0
             ok += 1 if result["ok"] else 0
             errors += 0 if result["ok"] else 1
             new_chapters += result["new"]
             if result["duration"] > slowest[0]:
                 slowest = (result["duration"], series.get("title") or series["url"])
             _set_progress(completed=i + 1)
-            if i < len(all_series) - 1:
+            # La pause ne sert qu'entre deux vraies requêtes vers le site : rien à attendre après une copie.
+            if i < len(all_series) - 1 and result["source"] != "cache":
                 time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
 
         total_duration = time.monotonic() - started
         database.finish_check_run(run_id, total_duration)
         checks_log.info(
-            "=== Fin [%s] en %s : %d OK, %d erreur(s), %d nouveau(x) chapitre(s)%s ===",
+            "=== Fin [%s] en %s : %d OK, %d erreur(s), %d nouveau(x) chapitre(s)%s%s ===",
             trigger, format_duration(total_duration), ok, errors, new_chapters,
+            f", {from_cache} série(s) reprise(s) sans solliciter le site" if from_cache else "",
             f" — plus lente : {slowest[1]} ({format_duration(slowest[0])})" if slowest[0] else "",
         )
     except Exception:

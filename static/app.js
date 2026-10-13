@@ -437,6 +437,7 @@ function renderChecksSummary(s) {
     <div class="stat-box"><strong>${fmtDuration(s.avg_run_seconds)}</strong><span>durée moyenne (auto)</span></div>
     <div class="stat-box"><strong>${fmtDuration(s.avg_series_seconds)}</strong><span>par série, en moyenne</span></div>
     <div class="stat-box${errClass}"><strong>${s.errors_24h} / ${s.checks_24h}</strong><span>erreurs sur 24 h</span></div>
+    ${s.from_cache_24h > 0 ? `<div class="stat-box"><strong>${s.from_cache_24h}</strong><span>reprises d'une copie (24 h), site non sollicité</span></div>` : ""}
   `;
   const runs = s.recent_runs;
   let extra = "";
@@ -491,12 +492,14 @@ function renderChecksList(runs) {
 }
 
 function renderRunDetail(run) {
+  const cached = run.items.filter((i) => i.source === "cache").length;
   const busy = run.items.reduce((sum, i) => sum + (i.duration_seconds || 0), 0);
   const pauses = run.status === "terminée" && run.total > 1 && run.duration_seconds ? Math.max(0, run.duration_seconds - busy) : null;
-  const head = `<p class="run-note">${run.total} série${run.total > 1 ? "s" : ""} · temps passé à récupérer les pages : ${fmtDuration(busy)}${pauses != null ? ` · pauses anti-blocage entre séries : ${fmtDuration(pauses)}` : ""}</p>`;
+  const head = `<p class="run-note">${run.total} série${run.total > 1 ? "s" : ""} · temps passé à récupérer les pages : ${fmtDuration(busy)}${pauses != null ? ` · pauses anti-blocage entre séries : ${fmtDuration(pauses)}` : ""}${cached ? ` · ${cached} reprise${cached > 1 ? "s" : ""} d'une copie (site non sollicité)` : ""}</p>`;
   const lines = run.items.map((i) => {
-    const icon = i.ok ? (i.new_chapters ? "🆕" : "✓") : "⚠";
-    const extra = i.ok ? (i.new_chapters ? ` · chap. ${escapeHtml(i.new_chapters)}` : "") : `<small class="run-error">${escapeHtml(i.error || "")}</small>`;
+    const icon = i.ok ? (i.new_chapters ? "🆕" : (i.source === "cache" ? "♻" : "✓")) : "⚠";
+    const copyTag = i.source === "cache" ? " · copie" : "";
+    const extra = i.ok ? (i.new_chapters ? ` · chap. ${escapeHtml(i.new_chapters)}` : "") + copyTag : `<small class="run-error">${escapeHtml(i.error || "")}</small>`;
     return `<div class="item-row ${i.ok ? "" : "bad"}"><span class="item-icon">${icon}</span><span class="item-title">${escapeHtml(i.series_title || "?")}${extra}</span><b>${fmtDuration(i.duration_seconds)}</b></div>`;
   }).join("");
   return head + lines;
@@ -528,20 +531,34 @@ async function loadHistory() {
   const stats = await statsRes.json();
   const items = await itemsRes.json();
 
+  // Par défaut : seul le graphique des 7 jours est visible. Les autres stats s'ouvrent d'un appui.
+  let statsOpen = false;
+  try { statsOpen = localStorage.getItem("historyStatsOpen") === "1"; } catch (e) {}
   const statsDiv = document.getElementById("history-stats");
+  const toggleHtml = `<button type="button" class="stats-toggle-link" aria-expanded="${statsOpen}">${statsOpen ? "Masquer ▴" : "Plus de stats ▾"}</button>`;
   statsDiv.innerHTML = `
-    <div class="stat-box"><strong>${stats.chapters_this_week}</strong><span>cette semaine</span></div>
-    <div class="stat-box"><strong>${stats.chapters_this_month}</strong><span>ce mois-ci</span></div>
-    <div class="stat-box"><strong>${stats.total_read}</strong><span>au total</span></div>
-    <div class="stat-box"><strong>${stats.streak_days}</strong><span>${stats.streak_days > 1 ? "jours d'affilée" : "jour d'affilée"}</span></div>
-    ${stats.top_series_title ? `<div class="stat-box"><strong>${escapeHtml(stats.top_series_title)}</strong><span>${stats.top_series_count} chapitres · plus lue</span></div>` : ""}
-    <div class="week-chart">${renderWeekChart(stats.last_7_days)}</div>
+    ${renderWeekChart(stats.last_7_days, toggleHtml)}
+    <div class="stats-details${statsOpen ? "" : " hidden"}">
+      <div class="stat-box"><strong>${stats.chapters_this_week}</strong><span>cette semaine</span></div>
+      <div class="stat-box"><strong>${stats.chapters_this_month}</strong><span>ce mois-ci</span></div>
+      <div class="stat-box"><strong>${stats.total_read}</strong><span>au total</span></div>
+      <div class="stat-box"><strong>${stats.streak_days}</strong><span>${stats.streak_days > 1 ? "jours d'affilée" : "jour d'affilée"}</span></div>
+      ${stats.top_series_title ? `<div class="stat-box"><strong>${escapeHtml(stats.top_series_title)}</strong><span>${stats.top_series_count} chapitres · plus lue</span></div>` : ""}
+    </div>
   `;
+  const toggleBtn = statsDiv.querySelector(".stats-toggle-link");
+  const detailsDiv = statsDiv.querySelector(".stats-details");
+  toggleBtn.addEventListener("click", () => {
+    const nowHidden = detailsDiv.classList.toggle("hidden");
+    toggleBtn.setAttribute("aria-expanded", String(!nowHidden));
+    toggleBtn.textContent = nowHidden ? "Plus de stats ▾" : "Masquer ▴";
+    try { localStorage.setItem("historyStatsOpen", nowHidden ? "0" : "1"); } catch (e) {}
+  });
 
   renderHistoryList(document.getElementById("history-list"), items);
 }
 
-function renderWeekChart(days) {
+function renderWeekChart(days, toggleHtml = "") {
   const max = Math.max(1, ...days.map((d) => d.count));
   const letters = ["D", "L", "M", "M", "J", "V", "S"];
   const bars = days.map((d) => {
@@ -549,7 +566,7 @@ function renderWeekChart(days) {
     const letter = letters[new Date(d.date + "T12:00:00").getDay()];
     return `<div class="week-col"><em>${d.count || ""}</em><i class="${d.count ? "on" : ""}" style="height:${height}px"></i><b>${letter}</b></div>`;
   }).join("");
-  return `<div class="week-title">Chapitres lus par jour · 7 derniers jours</div><div class="week-bars">${bars}</div>`;
+  return `<div class="week-chart"><div class="week-head"><div class="week-title">Chapitres lus par jour · 7 derniers jours</div>${toggleHtml}</div><div class="week-bars">${bars}</div></div>`;
 }
 
 document.getElementById("clear-history-btn").addEventListener("click", async () => {
