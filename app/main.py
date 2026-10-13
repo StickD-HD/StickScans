@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from . import anilist, auth, database
 from . import scraper as scraper_module
+from .parse_series import number_to_float
 from .backup import run_backup
 from .byparr_client import ByparrError
 from .scraper import normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
@@ -361,7 +362,7 @@ def mark_read_up_to(series_id: int, payload: MarkReadUpToRequest):
     if not database.get_series_by_id(series_id):
         raise HTTPException(404, "Série introuvable")
     try:
-        number_float = float(payload.number)
+        number_float = number_to_float(payload.number, strict=True)
     except ValueError:
         raise HTTPException(400, "Numéro de chapitre invalide")
     database.mark_read_up_to(series_id, number_float)

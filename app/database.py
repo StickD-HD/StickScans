@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 from pathlib import Path
 
+from .parse_series import number_to_float, LINK_RANK
+
 DB_PATH = Path(__file__).parent.parent / "data" / "manhwa.db"
 
 SCHEMA = """
@@ -94,6 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_check_run_items_run ON check_run_items(run_id);
 """
 
 NEW_SERIES_COLUMNS = {
+    "chapter_list_synced": "INTEGER NOT NULL DEFAULT 0",
     "synopsis": "TEXT",
     "author": "TEXT",
     "year": "TEXT",
@@ -117,6 +120,7 @@ NEW_SERIES_COLUMNS = {
 NEW_CHAPTERS_COLUMNS = {
     "read_at": "TEXT",
     "is_initial_fetch": "INTEGER NOT NULL DEFAULT 0",
+    "link_type": "TEXT NOT NULL DEFAULT 'site'",
 }
 
 
@@ -147,6 +151,8 @@ def init_db():
                 conn.execute(f"ALTER TABLE chapters ADD COLUMN {col} {coltype}")
         if is_first_migration:
             conn.execute("UPDATE chapters SET is_initial_fetch = 1")
+        # Les liens vers les plateformes officielles ne sont pas conservés : ces chapitres n'ont « pas de lien »
+        conn.execute("UPDATE chapters SET link_type = 'aucun', url = '' WHERE link_type = 'externe'")
         # Journal des vérifications : colonne « source » (site ou copie d'une autre instance)
         existing_items = {row["name"] for row in conn.execute("PRAGMA table_info(check_run_items)")}
         if "source" not in existing_items:
@@ -521,20 +527,49 @@ def unlock_field(series_id: int, field: str):
 
 
 def _upsert_chapters(conn, series_id: int, chapters: list[dict], is_initial: bool = False) -> list[dict]:
+    """Enregistre les chapitres vus sur la page et renvoie ceux qui sont VRAIMENT nouveaux.
+
+    Un chapitre avec lien de lecture scan-manga est nouveau dès qu'il apparaît (comportement d'origine).
+    Un chapitre sans lien de lecture scan-manga n'est nouveau que s'il dépasse le
+    dernier chapitre connu ; les anciens chapitres qui apparaissent d'un coup (premier import de la
+    liste complète) sont enregistrés sans bruit, pour ne pas inonder les Nouveautés.
+    """
+    row = conn.execute("SELECT chapter_list_synced FROM series WHERE id = ?", (series_id,)).fetchone()
+    already_synced = bool(row["chapter_list_synced"]) if row else False
+    stored = {
+        r["number"]: r["link_type"] or "site"
+        for r in conn.execute("SELECT number, link_type FROM chapters WHERE series_id = ?", (series_id,))
+    }
+    frontier = conn.execute("SELECT MAX(number_float) FROM chapters WHERE series_id = ?", (series_id,)).fetchone()[0]
+
     new_chapters = []
     for chap in chapters:
         number = chap["number"]
-        url = chap["url"]
-        try:
-            number_float = float(number)
-        except ValueError:
-            number_float = 0.0
+        url = chap.get("url") or ""
+        link_type = chap.get("link_type") or ("site" if url else "aucun")
+        number_float = number_to_float(number)
+
+        if number in stored:
+            # Un lien de meilleure qualité est apparu (ex. le chapitre devient lisible sur scan-manga) : on le garde
+            if LINK_RANK.get(link_type, 0) > LINK_RANK.get(stored[number], 0):
+                conn.execute(
+                    "UPDATE chapters SET url = ?, link_type = ? WHERE series_id = ? AND number = ?",
+                    (url, link_type, series_id, number),
+                )
+            continue
+
+        silent = is_initial
+        if not is_initial and link_type != "site":
+            silent = (not already_synced) or frontier is None or number_float <= frontier
         cur = conn.execute(
-            "INSERT OR IGNORE INTO chapters (series_id, number, number_float, url, is_initial_fetch) VALUES (?, ?, ?, ?, ?)",
-            (series_id, number, number_float, url, 1 if is_initial else 0),
+            "INSERT OR IGNORE INTO chapters (series_id, number, number_float, url, link_type, is_initial_fetch) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (series_id, number, number_float, url, link_type, 1 if silent else 0),
         )
-        if cur.rowcount > 0:
+        if cur.rowcount > 0 and not silent:
             new_chapters.append({"number": number, "url": url})
+
+    conn.execute("UPDATE series SET chapter_list_synced = 1 WHERE id = ?", (series_id,))
     return new_chapters
 
 

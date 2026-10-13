@@ -12,14 +12,60 @@ CHAPTER_LINK_RE = re.compile(
 ALT_NAME_RE = re.compile(r"alternativeHeadline['\"]?>([^<]+)")
 
 
+CHAPTER_NAME_RE = re.compile(r"Chapitre\s+([0-9]+(?:[.\-][0-9]+)?)", re.IGNORECASE)
+LINK_RANK = {"aucun": 0, "site": 1}
+
+
+def number_to_float(number, strict: bool = False) -> float:
+    """Valeur numérique d'un numéro de chapitre, pour trier. « 49-1 » (sous-chapitre) vaut 49,01."""
+    text = str(number).strip()
+    match = re.fullmatch(r"(\d+)-(\d+)", text)
+    if match:
+        return int(match.group(1)) + min(int(match.group(2)), 99) / 100
+    try:
+        return float(text)
+    except ValueError:
+        if strict:
+            raise
+        return 0.0
+
+
 def extract_chapters(html: str) -> list[dict]:
-    seen = {}
+    """Liste de TOUS les chapitres de la page, avec le type de lien :
+    - "site"  : lien de lecture sur scan-manga.com ;
+    - "aucun" : chapitre listé mais sans lien de lecture scan-manga (y compris les chapitres licenciés,
+                dont le lien pointe vers une plateforme officielle : on ne le garde volontairement pas).
+    """
+    best: dict[str, dict] = {}
+
+    def put(number: str, url: str, link_type: str):
+        current = best.get(number)
+        if current is None or LINK_RANK[link_type] > LINK_RANK[current["link_type"]]:
+            best[number] = {"number": number, "url": url, "link_type": link_type}
+
+    # 1) liens de lecture scan-manga (comportement d'origine)
     for full_url, number in CHAPTER_LINK_RE.findall(html):
-        if number not in seen:
-            seen[number] = full_url
-    chapters = [{"number": num, "url": url} for num, url in seen.items()]
-    chapters.sort(key=lambda c: float(c["number"]), reverse=True)
-    return chapters
+        put(number, full_url, "site")
+
+    # 2) la liste complète de la page, avec ou sans lien
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        for li in soup.select("li.chapitre"):
+            name = li.select_one(".chapitre_nom")
+            match = CHAPTER_NAME_RE.search(name.get_text(" ", strip=True)) if name else None
+            if not match:
+                continue
+            number = match.group(1)
+            hrefs = [a["href"].strip() for a in li.find_all("a", href=True)]
+            site = next((h for h in hrefs if "/lecture-en-ligne/" in h), None)
+            if site:
+                put(number, site if site.startswith("http") else "https://www.scan-manga.com" + site, "site")
+            else:
+                put(number, "", "aucun")
+    except Exception:
+        pass  # structure inattendue : on garde au moins les chapitres avec lien de lecture
+
+    return sorted(best.values(), key=lambda c: number_to_float(c["number"]), reverse=True)
 
 
 def extract_alt_names(html: str) -> list[str]:
@@ -100,6 +146,12 @@ def parse_series_page(html: str) -> dict:
             last_chapter_number = num_match.group(1)
 
     chapters = extract_chapters(html)
+
+    # Séries sans bouton « dernier chapitre » : on prend le chapitre le plus élevé de la liste
+    if last_chapter_number is None and chapters:
+        top = chapters[0]
+        last_chapter_number = top["number"]
+        last_chapter_url = top["url"] or None
 
     return {
         "title": title,

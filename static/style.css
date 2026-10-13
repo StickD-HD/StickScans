@@ -388,6 +388,9 @@ main#library { padding: 0 18px; }
 .chapter-row.selected { background: var(--accent-soft); border-radius: var(--radius-sm); }
 .chapter-checkbox, .select-checkbox { width: 20px; height: 20px; accent-color: var(--accent); flex-shrink: 0; }
 .chapter-number { font-size: 0.88rem; }
+.chapter-row.no-link { cursor: default; }
+.chapter-row.no-link .chapter-number { opacity: 0.45; }
+.chapter-tag { margin-left: auto; font-size: 0.64rem; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; flex: none; }
 
 /* --- Mises à jour / Historique --- */
 #updates-view main, #history-view main { padding: 0 18px; }

@@ -931,7 +931,7 @@ async function loadSeriesCategories() {
 }
 
 function updateContinueReadingButton() {
-  const unread = currentChapters.filter((c) => !c.is_read).sort((a, b) => a.number_float - b.number_float);
+  const unread = currentChapters.filter((c) => !c.is_read && c.url).sort((a, b) => a.number_float - b.number_float);
   if (unread.length === 0) {
     continueReadingBtn.classList.add("hidden");
     return;
@@ -954,12 +954,15 @@ async function loadChapters() {
   for (const c of currentChapters) {
     const li = document.createElement("li");
     const isSelected = selectedChapterIds.has(c.id);
-    li.className = "chapter-row" + (c.is_read ? " read" : "") + (isSelected ? " selected" : "");
+    const noLink = c.link_type === "aucun" || !c.url;
+    const linkTag = noLink ? '<span class="chapter-tag">pas de lien</span>' : "";
+    li.className = "chapter-row" + (c.is_read ? " read" : "") + (isSelected ? " selected" : "") + (noLink ? " no-link" : "");
 
     if (selectionMode) {
       li.innerHTML = `
         <input type="checkbox" class="select-checkbox" ${isSelected ? "checked" : ""}>
         <span class="chapter-number">Chapitre ${escapeHtml(c.number)}</span>
+        ${linkTag}
       `;
       const cb = li.querySelector(".select-checkbox");
       cb.addEventListener("change", (e) => {
@@ -975,6 +978,7 @@ async function loadChapters() {
       li.innerHTML = `
         <input type="checkbox" class="chapter-checkbox" ${c.is_read ? "checked" : ""}>
         <span class="chapter-number">Chapitre ${escapeHtml(c.number)}</span>
+        ${linkTag}
       `;
       li.querySelector(".chapter-checkbox").addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -999,6 +1003,7 @@ async function loadChapters() {
         updateContinueReadingButton();
       });
       li.addEventListener("click", () => {
+        if (noLink) return; // rien à ouvrir : on peut quand même cocher le chapitre comme lu
         window.open(c.url, "_blank");
         markReadUpTo(c.number);
       });
