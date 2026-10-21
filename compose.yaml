@@ -5,7 +5,9 @@ services:
     ports:
       - 8420:8000
     volumes:
-      - ./data:/app/data
+      # Dossier des données (base, sauvegardes, copie des pages). Avec Portainer, définis DATA_DIR sur un
+      # chemin ABSOLU du serveur (ex. /opt/stacks/manhwa-tracker/data) : il survit alors à la suppression de la stack.
+      - ${DATA_DIR:-./data}:/app/data
     environment:
       - BYPARR_URL=http://byparr:8191/v1
       # Authentification : laisse AUTH_PASSWORD vide pour la désactiver.
@@ -13,7 +15,7 @@ services:
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
       # Passe à true si l'app est servie en HTTPS (reverse proxy).
       - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
-      # Vérifications à xx:00 (celles de l'instance de ton ami sont à xx:30).
+      # Vérifications à xx:00 (celles de l'instance de ton ami sont à xx:10).
       - CHECK_OFFSET_MINUTES=0
       # Pause entre deux séries pendant une vérification : 2 à 4 s (avant : 3 à 8 s).
       # Pour revenir à l'ancien rythme, supprime ces deux lignes.

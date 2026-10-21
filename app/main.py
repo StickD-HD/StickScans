@@ -74,6 +74,17 @@ async def require_auth(request: Request, call_next):
     return RedirectResponse(f"/login?next={quote(target, safe='')}", status_code=303)
 
 
+@app.middleware("http")
+async def never_serve_stale_pages(request: Request, call_next):
+    """Pages et fichiers de l'appli : toujours revérifiés auprès du serveur (jamais de vieille copie).
+    Sans ça, un cache intermédiaire (Cloudflare, par exemple) continue de servir l'ancienne version
+    de app.js / style.css pendant des heures après une mise à jour."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "private, no-cache"
+    return response
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
