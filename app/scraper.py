@@ -170,10 +170,16 @@ def check_all_series(trigger: str = "auto"):
 
         ok = errors = new_chapters = from_cache = 0
         slowest = (0.0, "")
-        use_cache = trigger == "auto" and scrape_cache.MODE == "read"
+        use_cache = trigger == "auto" and scrape_cache.MODE in ("read", "both")
         scrape_cache.purge_old()
         for i, series in enumerate(all_series):
             _set_progress(current_title=series.get("title"))
+            
+            status = (series.get("status") or "").strip().lower()
+            if status in ("terminé", "terminée", "completed"):
+                _set_progress(completed=i + 1)
+                continue
+
             result = _check(series, run_id, use_cache=use_cache)
             from_cache += 1 if result["source"] == "cache" else 0
             ok += 1 if result["ok"] else 0

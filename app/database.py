@@ -127,15 +127,20 @@ NEW_CHAPTERS_COLUMNS = {
 @contextmanager
 def get_conn():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    # Ajout d'un timeout de 15s pour éviter le verrouillage immédiat
+    conn = sqlite3.connect(DB_PATH, timeout=15.0)
     conn.row_factory = sqlite3.Row
+    
+    # Point 5 : Activation du mode WAL et optimisation
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA foreign_keys = ON")
+    
     try:
         yield conn
         conn.commit()
     finally:
         conn.close()
-
 
 def init_db():
     with get_conn() as conn:

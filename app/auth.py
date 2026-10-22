@@ -27,8 +27,6 @@ from pathlib import Path
 
 logger = logging.getLogger("manhwa-tracker.auth")
 
-COOKIE_NAME = os.environ.get("AUTH_COOKIE_NAME", "stickscans_session")
-
 AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "admin")
 AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "")
 SESSION_DAYS = int(os.environ.get("AUTH_SESSION_DAYS", "30"))
@@ -96,6 +94,10 @@ def _load_secret() -> bytes:
 
 
 _SECRET = _load_secret()
+
+# Nom du cookie : dérivé de la clé de session, donc différent pour chaque instance (la clé est propre à
+# chaque dossier data/) sans rien configurer. AUTH_COOKIE_NAME reste possible pour le forcer.
+COOKIE_NAME = os.environ.get("AUTH_COOKIE_NAME") or "stickscans_" + hashlib.sha256(_SECRET).hexdigest()[:8]
 
 
 def _b64e(raw: bytes) -> str:

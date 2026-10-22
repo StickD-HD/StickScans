@@ -516,6 +516,50 @@ document.getElementById("download-db-btn").addEventListener("click", () => {
   window.location.href = `/api/database/download?tz_offset=${tzOffset}`;
 });
 
+const importDbBtn = document.getElementById("import-db-btn");
+const importDbInput = document.getElementById("import-db-input");
+
+if (importDbBtn && importDbInput) {
+  importDbBtn.addEventListener("click", () => {
+    importDbInput.click();
+  });
+
+  importDbInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm("⚠️ ATTENTION : L'importation va écraser TOUTE ta bibliothèque et ton historique actuels. Es-tu sûr de vouloir continuer ?")) {
+      e.target.value = ""; // Réinitialiser
+      return;
+    }
+
+    importDbBtn.disabled = true;
+    importDbBtn.textContent = "Importation en cours...";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/database/import", {
+        method: "POST",
+        body: formData,
+      });
+      
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Erreur lors de l'importation");
+      
+      alert("Base de données importée avec succès ! L'application va se recharger.");
+      location.reload(); // Recharge la page pour afficher les nouvelles données
+    } catch (err) {
+      alert("Erreur : " + err.message);
+    } finally {
+      importDbBtn.disabled = false;
+      importDbBtn.textContent = "Importer une base";
+      e.target.value = "";
+    }
+  });
+}
+
 document.getElementById("open-checks-btn").addEventListener("click", () => {
   goToTopView("checks-view");
   navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === "settings-view"));

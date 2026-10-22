@@ -7,7 +7,7 @@ Le partage est à SENS UNIQUE : l'instance secondaire ne peut que lire. Les sér
 récupérées normalement.
 
 Réglages (variables d'environnement) :
-- SCRAPE_CACHE_MODE            : "off" (défaut), "write" (instance principale) ou "read" (instance secondaire).
+- SCRAPE_CACHE_MODE            : "off" (défaut), "write" (principale), "read" (secondaire) ou "both" (les deux instances lisent ET écrivent).
 - SCRAPE_CACHE_DIR             : dossier de la copie (le même pour les deux instances).
 - SCRAPE_CACHE_MAX_AGE_MINUTES : âge maximal d'une copie réutilisable (défaut : 30).
 """
@@ -20,16 +20,19 @@ from pathlib import Path
 
 logger = logging.getLogger("manhwa-tracker.cache")
 
-MODE = os.environ.get("SCRAPE_CACHE_MODE", "off").strip().lower()
-if MODE not in ("off", "read", "write"):
+# Activation automatique : si un dossier est monté sur /app/cache, le partage est actif (mode "both").
+# Les variables SCRAPE_CACHE_* restent possibles pour un réglage manuel.
+_default_dir = Path("/app/cache")
+CACHE_DIR = Path(os.environ["SCRAPE_CACHE_DIR"]) if os.environ.get("SCRAPE_CACHE_DIR") else (_default_dir if _default_dir.is_dir() else None)
+MODE = os.environ.get("SCRAPE_CACHE_MODE", "").strip().lower() or ("both" if CACHE_DIR else "off")
+if MODE not in ("off", "read", "write", "both"):
     MODE = "off"
-CACHE_DIR = Path(os.environ["SCRAPE_CACHE_DIR"]) if os.environ.get("SCRAPE_CACHE_DIR") else None
-MAX_AGE_SECONDS = max(1, int(os.environ.get("SCRAPE_CACHE_MAX_AGE_MINUTES", "30") or 30)) * 60
+MAX_AGE_SECONDS = max(1, int(os.environ.get("SCRAPE_CACHE_MAX_AGE_MINUTES", "40") or 40)) * 60
 ORPHAN_DAYS = 3  # une copie plus ancienne n'est plus utile (série supprimée, par exemple)
 
 
 def is_active() -> bool:
-    return MODE in ("read", "write") and CACHE_DIR is not None
+    return MODE in ("read", "write", "both") and CACHE_DIR is not None
 
 
 def _path_for(url: str) -> Path:
@@ -39,7 +42,7 @@ def _path_for(url: str) -> Path:
 
 def read(url: str) -> tuple[str, float] | None:
     """Renvoie (html, âge en secondes) si une copie assez récente existe, sinon None."""
-    if MODE != "read" or CACHE_DIR is None:
+    if MODE not in ("read", "both") or CACHE_DIR is None:
         return None
     try:
         path = _path_for(url)
@@ -53,7 +56,7 @@ def read(url: str) -> tuple[str, float] | None:
 
 
 def write(url: str, html: str) -> None:
-    if MODE != "write" or CACHE_DIR is None:
+    if MODE not in ("write", "both") or CACHE_DIR is None:
         return
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -67,7 +70,7 @@ def write(url: str, html: str) -> None:
 
 
 def purge_old() -> None:
-    if MODE != "write" or CACHE_DIR is None or not CACHE_DIR.exists():
+    if MODE not in ("write", "both") or CACHE_DIR is None or not CACHE_DIR.exists():
         return
     limit = time.time() - ORPHAN_DAYS * 86400
     for path in CACHE_DIR.glob("*.html.gz"):

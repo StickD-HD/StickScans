@@ -2,6 +2,9 @@ import logging
 import os
 import sqlite3
 import tempfile
+import shutil
+
+from fastapi import UploadFile, File
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from contextlib import asynccontextmanager
@@ -168,7 +171,7 @@ def login(payload: LoginRequest, request: Request, response: Response):
         max_age=auth.SESSION_DAYS * 86400,
         httponly=True,
         samesite="lax",
-        secure=auth.COOKIE_SECURE,
+        secure=auth.COOKIE_SECURE or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https" or request.url.scheme == "https",
         path="/",
     )
     return {"ok": True, "next": auth.safe_next_url(payload.next)}
@@ -304,25 +307,62 @@ def download_database(tz_offset: int = 0):
     """Télécharge une copie cohérente de la base (même si l'appli écrit au même moment)."""
     if not database.DB_PATH.exists():
         raise HTTPException(404, "Base de données introuvable")
+    
     tmp = tempfile.NamedTemporaryFile(prefix="stickscans-", suffix=".db", delete=False)
     tmp.close()
+    
     source = sqlite3.connect(database.DB_PATH)
     target = sqlite3.connect(tmp.name)
     try:
-        source.backup(target)  # copie intégrale et cohérente fournie par SQLite
+        source.backup(target)
+        # Point 7 : Nettoyage du jeton AniList pour l'export
+        target.execute("DELETE FROM app_settings WHERE key = 'anilist_token'")
+        target.commit()
     finally:
         target.close()
         source.close()
+        
     local_now = datetime.now(timezone.utc) + timedelta(minutes=tz_offset)
     filename = f"stickscans-{local_now:%Y-%m-%d_%H-%M}.db"
+    
     return FileResponse(
         tmp.name,
         media_type="application/octet-stream",
         filename=filename,
-        background=BackgroundTask(os.remove, tmp.name),  # le fichier temporaire est supprimé après l'envoi
+        background=BackgroundTask(os.remove, tmp.name),
     )
 
+@app.post("/api/database/import")
+async def import_database(file: UploadFile = File(...)):
+    if not file.filename.endswith(".db"):
+        raise HTTPException(400, "Le fichier doit être un .db")
+    
+    # 1. Sauvegarder le fichier uploadé dans un fichier temporaire
+    tmp_path = database.DB_PATH.with_suffix('.tmp')
+    with open(tmp_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # 2. Vérifier que c'est bien une base SQLite valide de StickScans
+    try:
+        conn = sqlite3.connect(tmp_path)
+        conn.execute("SELECT 1 FROM series LIMIT 1")
+        conn.close()
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(400, "Le fichier n'est pas une base de données StickScans valide.")
 
+    # 3. Remplacer la base de données actuelle
+    tmp_path.replace(database.DB_PATH)
+    
+    # 4. Sécurité vitale : supprimer les fichiers WAL/SHM de l'ancienne base 
+    # pour éviter qu'ils ne corrompent la nouvelle base importée
+    wal_path = database.DB_PATH.with_name(database.DB_PATH.name + "-wal")
+    shm_path = database.DB_PATH.with_name(database.DB_PATH.name + "-shm")
+    if wal_path.exists(): wal_path.unlink()
+    if shm_path.exists(): shm_path.unlink()
+
+    return {"status": "ok"}
+    
 @app.get("/api/checks/summary")
 def checks_summary():
     return database.get_check_summary()

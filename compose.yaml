@@ -1,38 +1,50 @@
+x-app: &app
+  image: ghcr.io/stickd-hd/stickscans:latest
+  restart: unless-stopped
+  depends_on:
+    byparr:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/auth/status')"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+
 services:
-  app:
-    build: .
-    container_name: manhwa-tracker
-    ports:
-      - 8420:8000
+  stickscans-1:
+    <<: *app
+    container_name: stickscans-1
+    ports: ["8420:8000"]
     volumes:
-      # Dossier des données (base, sauvegardes, copie des pages). Avec Portainer, définis DATA_DIR sur un
-      # chemin ABSOLU du serveur (ex. /opt/stacks/manhwa-tracker/data) : il survit alors à la suppression de la stack.
-      - ${DATA_DIR:-./data}:/app/data
+      - ${DATA_DIR_1:?Définis DATA_DIR_1}:/app/data
+      - cache:/app/cache
     environment:
-      - BYPARR_URL=http://byparr:8191/v1
-      # Authentification : laisse AUTH_PASSWORD vide pour la désactiver.
-      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
-      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
-      # Passe à true si l'app est servie en HTTPS (reverse proxy).
-      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
-      # Vérifications à xx:00 (celles de l'instance de ton ami sont à xx:10).
+      - AUTH_USERNAME=${USER_1:-admin}
+      - AUTH_PASSWORD=${PASSWORD_1}
       - CHECK_OFFSET_MINUTES=0
-      # Pause entre deux séries pendant une vérification : 2 à 4 s (avant : 3 à 8 s).
-      # Pour revenir à l'ancien rythme, supprime ces deux lignes.
-      - CHECK_MIN_DELAY_SECONDS=2
-      - CHECK_MAX_DELAY_SECONDS=4
-      # Partage avec l'instance de ton ami : ton instance garde une copie des pages récupérées,
-      # la sienne les réutilise (lecture seule) au lieu de redemander les séries en commun au site.
-      - SCRAPE_CACHE_MODE=write
-      - SCRAPE_CACHE_DIR=/app/data/scrape-cache
-    depends_on:
-      - byparr
-    restart: unless-stopped
+
+  stickscans-2:
+    <<: *app
+    container_name: stickscans-2
+    ports: ["8421:8000"]
+    volumes:
+      - ${DATA_DIR_2:?Définis DATA_DIR_2}:/app/data
+      - cache:/app/cache
+    environment:
+      - AUTH_USERNAME=${USER_2:-admin}
+      - AUTH_PASSWORD=${PASSWORD_2}
+      - CHECK_OFFSET_MINUTES=30
 
   byparr:
     image: ghcr.io/thephaseless/byparr:latest
-    container_name: manhwa-byparr
-    shm_size: '2gb'
-    environment:
-      - LOG_LEVEL=INFO
+    container_name: byparr
+    shm_size: 2gb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8191/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+
+volumes:
+  cache:
