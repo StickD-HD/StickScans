@@ -26,7 +26,7 @@ import threading
 from logging.handlers import RotatingFileHandler
 
 from . import database, scrape_cache
-from .browser_client import fetch_html
+from .byparr_client import fetch_html
 from .parse_series import parse_series_page
 
 logger = logging.getLogger("manhwa-tracker.scraper")

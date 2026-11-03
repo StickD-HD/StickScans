@@ -23,7 +23,7 @@ from . import anilist, auth, database
 from . import scraper as scraper_module
 from .parse_series import number_to_float
 from .backup import run_backup
-from .browser_client import FetchError
+from .byparr_client import ByparrError
 from .scraper import normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -284,7 +284,7 @@ def add_series(payload: AddSeriesRequest):
 
     try:
         parsed = fetch_and_parse_new_url(url)
-    except FetchError as e:
+    except ByparrError as e:
         raise HTTPException(502, f"Échec de la récupération : {e}")
 
     if not parsed.get("title"):
