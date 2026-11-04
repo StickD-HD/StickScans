@@ -23,7 +23,7 @@ from . import anilist, auth, database
 from . import scraper as scraper_module
 from .parse_series import number_to_float
 from .backup import run_backup
-from .byparr_client import ByparrError
+from .fetcher import FetchError
 from .scraper import normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -284,13 +284,16 @@ def add_series(payload: AddSeriesRequest):
 
     try:
         parsed = fetch_and_parse_new_url(url)
-    except ByparrError as e:
+    except FetchError as e:
         raise HTTPException(502, f"Échec de la récupération : {e}")
 
     if not parsed.get("title"):
         raise HTTPException(422, "Impossible d'extraire les infos de cette page (structure inattendue ?)")
 
-    series_id = database.insert_series(url, parsed)
+    try:
+        series_id = database.insert_series(url, parsed)
+    except sqlite3.IntegrityError:
+        raise HTTPException(409, "Cette série est déjà dans ta bibliothèque")
     for category_id in payload.category_ids:
         database.add_series_to_category(series_id, category_id)
     return database.get_series_by_id(series_id)
