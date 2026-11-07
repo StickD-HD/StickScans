@@ -123,9 +123,9 @@
         </div>
       </section>
       <section class="settings-section">
-        <h2>Catégories</h2>
-        <p class="section-label">Créer, renommer ou supprimer tes catégories.</p>
-        <button id="manage-categories-btn-settings">Gérer les catégories</button>
+        <h2>Aperçu de lecture</h2>
+        <p class="section-label">Temps passé à lire, séries et genres les plus lus, rythme : tes statistiques en graphiques.</p>
+        <button id="open-reading-btn">Voir mon aperçu</button>
       </section>
       <section class="settings-section">
         <h2>Vérifications</h2>
@@ -161,6 +161,14 @@
     <div id="checks-extra"></div>
     <main id="checks-list"></main>
     <p class="checks-footer"><a class="action-btn-link" href="/api/checks/log" download="scrape.log">Télécharger le fichier log</a></p>
+  </div>
+
+  <div id="reading-view" class="hidden">
+    <header>
+      <button id="reading-back-btn">← Retour</button>
+      <h1>Aperçu de lecture</h1>
+    </header>
+    <main id="reading-content"></main>
   </div>
 
   <div id="filter-modal" class="hidden">
@@ -277,6 +285,7 @@
       </div>
     </div>
 
+    <p id="chapters-count" class="section-label"></p>
     <div id="chapters-toolbar">
       <button id="select-mode-btn">Sélectionner</button>
       <button id="select-all-btn" class="hidden">Tout sélectionner</button>

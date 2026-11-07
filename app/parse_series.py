@@ -148,7 +148,10 @@ def parse_series_page(html: str) -> dict:
         elif "statut" in label_text:
             status = value_tag.get_text(strip=True) or None
         elif label_text == "team":
-            team = value_tag.get_text(strip=True) or None
+            # Une team par lien (ou par morceau de texte) : sans séparateur, elles se collaient en un seul mot.
+            names = [a.get_text(strip=True) for a in value_tag.select("a")]
+            names = [n for n in names if n] or list(value_tag.stripped_strings)
+            team = ", ".join(names) or None
         elif "popularit" in label_text:
             digits = re.sub(r"\D", "", value_tag.get_text(strip=True))
             popularity = int(digits) if digits else None

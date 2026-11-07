@@ -483,6 +483,17 @@ def get_stats(tz_offset: int = 0):
     return database.get_reading_stats(tz_offset_minutes=tz_offset)
 
 
+# READING_MINUTES_PER_CHAPTER : durée estimée de lecture d'un chapitre (défaut 5 min), pour l'aperçu de lecture.
+READING_MINUTES_PER_CHAPTER = max(1, int(os.environ.get("READING_MINUTES_PER_CHAPTER", "5") or 5))
+
+
+@app.get("/api/stats/reading")
+def reading_overview_stats(tz_offset: int = 0):
+    return database.get_reading_overview(
+        tz_offset_minutes=tz_offset, minutes_per_chapter=READING_MINUTES_PER_CHAPTER
+    )
+
+
 @app.get("/api/settings/anilist")
 def get_anilist_setting():
     return anilist.get_status()
