@@ -26,7 +26,7 @@ import threading
 from logging.handlers import RotatingFileHandler
 
 from . import database, scrape_cache
-from .fetcher import fetch_html
+from .fetcher import BlockedError, fetch_html
 from .parse_series import parse_series_page
 
 logger = logging.getLogger("manhwa-tracker.scraper")
@@ -90,15 +90,17 @@ def _set_progress(**kwargs):
         _progress.update(kwargs)
 
 
-def _check(series: dict, run_id: int | None, use_cache: bool = False) -> dict:
+def _check(series: dict, run_id: int | None, use_cache: bool = False, bulk: bool = False) -> dict:
     """Vérifie une série, mesure la durée, l'enregistre dans le journal (base + fichier).
 
     use_cache : réutiliser la copie récente d'une autre instance (vérifications automatiques seulement ;
-    un clic manuel va toujours chercher la page sur le site)."""
+    un clic manuel va toujours chercher la page sur le site).
+    bulk : vérification groupée ; un blocage du site n'y est pas inscrit comme erreur de la série."""
     started = time.monotonic()
     title = series.get("title") or series["url"]
     new_numbers: list[str] = []
     error = None
+    blocked = False
     source = "site"
     cache_age = 0.0
     try:
@@ -125,7 +127,10 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False) -> dict:
             scrape_cache.write(series["url"], html)  # sans effet hors du mode « write »
     except Exception as e:  # une série en échec (réseau, page illisible) ne doit pas bloquer les autres
         error = str(e) or e.__class__.__name__
-        database.update_series_error(series["id"], error)
+        blocked = isinstance(e, BlockedError)
+        if not (blocked and bulk):
+            # Pendant une vérification groupée, un blocage du site n'est pas la faute de la série.
+            database.update_series_error(series["id"], error)
     duration = time.monotonic() - started
 
     if error:
@@ -140,7 +145,8 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False) -> dict:
 
     if run_id is not None:
         database.add_check_item(run_id, series["id"], title, duration, error is None, new_numbers, error, source)
-    return {"ok": error is None, "duration": duration, "new": len(new_numbers), "source": source}
+    return {"ok": error is None, "duration": duration, "new": len(new_numbers), "source": source,
+            "blocked": blocked}
 
 
 def check_one_series(series: dict) -> dict:
@@ -169,6 +175,7 @@ def check_all_series(trigger: str = "auto"):
         checks_log.info("=== Vérification [%s] : début, %d série(s) ===", trigger, len(all_series))
 
         ok = errors = new_chapters = from_cache = 0
+        interrupted = False
         slowest = (0.0, "")
         use_cache = trigger == "auto" and scrape_cache.MODE in ("read", "both")
         scrape_cache.purge_old()
@@ -180,7 +187,13 @@ def check_all_series(trigger: str = "auto"):
                 _set_progress(completed=i + 1)
                 continue
 
-            result = _check(series, run_id, use_cache=use_cache)
+            result = _check(series, run_id, use_cache=use_cache, bulk=True)
+            if result["blocked"]:
+                # Le site refuse les requêtes : inutile d'insister avec les séries restantes.
+                interrupted = True
+                errors += 1
+                _set_progress(completed=len(all_series))
+                break
             from_cache += 1 if result["source"] == "cache" else 0
             ok += 1 if result["ok"] else 0
             errors += 0 if result["ok"] else 1
@@ -192,6 +205,9 @@ def check_all_series(trigger: str = "auto"):
             if i < len(all_series) - 1 and result["source"] != "cache":
                 time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
 
+        if interrupted:
+            checks_log.error("=== Vérification [%s] interrompue : le site refuse les requêtes. "
+                             "Les séries restantes seront revérifiées au prochain passage ===", trigger)
         total_duration = time.monotonic() - started
         database.finish_check_run(run_id, total_duration)
         checks_log.info(

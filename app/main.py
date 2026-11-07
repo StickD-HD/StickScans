@@ -2,7 +2,6 @@ import logging
 import os
 import sqlite3
 import tempfile
-import shutil
 
 from fastapi import UploadFile, File
 from datetime import datetime, timedelta, timezone
@@ -22,7 +21,7 @@ from pydantic import BaseModel
 from . import anilist, auth, database
 from . import scraper as scraper_module
 from .parse_series import number_to_float
-from .backup import run_backup
+from .backup import replace_database, run_backup
 from .fetcher import FetchError
 from .scraper import normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
 
@@ -44,7 +43,7 @@ async def lifespan(app: FastAPI):
         logger.info("Authentification activée (utilisateur : %s)", auth.AUTH_USERNAME)
     else:
         logger.warning("AUTH_PASSWORD non défini : l'application est accessible SANS authentification")
-    run_backup()
+    run_backup(overwrite=False)  # au démarrage : on garde la copie du jour si elle existe déjà
     # CHECK_INTERVAL_HOURS : fréquence des vérifications (défaut : toutes les heures).
     # CHECK_OFFSET_MINUTES : si défini, les vérifications tombent à cette minute pile de l'heure
     # (ex. 30 => xx:30), pratique pour décaler deux instances qui interrogent le même site.
@@ -335,36 +334,36 @@ def download_database(tz_offset: int = 0):
         background=BackgroundTask(os.remove, tmp.name),
     )
 
+MAX_IMPORT_BYTES = 200 * 1024 * 1024
+
+
 @app.post("/api/database/import")
-async def import_database(file: UploadFile = File(...)):
-    if not file.filename.endswith(".db"):
+def import_database(file: UploadFile = File(...)):
+    if not (file.filename or "").endswith(".db"):
         raise HTTPException(400, "Le fichier doit être un .db")
-    
-    # 1. Sauvegarder le fichier uploadé dans un fichier temporaire
-    tmp_path = database.DB_PATH.with_suffix('.tmp')
-    with open(tmp_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # 2. Vérifier que c'est bien une base SQLite valide de StickScans
+    if get_progress()["is_running"]:
+        raise HTTPException(409, "Une vérification est en cours : réessaie quand elle est terminée.")
+
+    tmp_path = database.DB_PATH.with_suffix(".tmp")
     try:
-        conn = sqlite3.connect(tmp_path)
-        conn.execute("SELECT 1 FROM series LIMIT 1")
-        conn.close()
-    except Exception:
+        # 1. Réception du fichier dans un fichier temporaire (taille limitée)
+        size = 0
+        with open(tmp_path, "wb") as buffer:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_IMPORT_BYTES:
+                    raise HTTPException(413, "Fichier trop volumineux")
+                buffer.write(chunk)
+        # 2. Contrôle d'intégrité, copie de sécurité de la base actuelle, puis remplacement
+        safe = replace_database(tmp_path)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    finally:
         tmp_path.unlink(missing_ok=True)
-        raise HTTPException(400, "Le fichier n'est pas une base de données StickScans valide.")
 
-    # 3. Remplacer la base de données actuelle
-    tmp_path.replace(database.DB_PATH)
-    
-    # 4. Sécurité vitale : supprimer les fichiers WAL/SHM de l'ancienne base 
-    # pour éviter qu'ils ne corrompent la nouvelle base importée
-    wal_path = database.DB_PATH.with_name(database.DB_PATH.name + "-wal")
-    shm_path = database.DB_PATH.with_name(database.DB_PATH.name + "-shm")
-    if wal_path.exists(): wal_path.unlink()
-    if shm_path.exists(): shm_path.unlink()
-
-    return {"status": "ok"}
+    # 3. Met le schéma de la base importée à niveau si elle vient d'une version plus ancienne
+    database.init_db()
+    return {"status": "ok", "backup": safe.name if safe else None}
     
 @app.get("/api/checks/summary")
 def checks_summary():

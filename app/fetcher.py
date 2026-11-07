@@ -32,17 +32,21 @@ class FetchError(Exception):
     pass
 
 
-def _block(reason: str) -> FetchError:
+class BlockedError(FetchError):
+    """Le site refuse les requêtes (403/429/challenge), ou la collecte est en pause après un refus."""
+
+
+def _block(reason: str) -> BlockedError:
     global _blocked_until
     _blocked_until = time.time() + COOLDOWN_SECONDS
-    return FetchError(f"{reason} : collecte suspendue {COOLDOWN_SECONDS // 60} min, aucun contournement tenté")
+    return BlockedError(f"{reason} : collecte suspendue {COOLDOWN_SECONDS // 60} min, aucun contournement tenté")
 
 
 def fetch_html(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> str:
     with _lock:
         remaining = _blocked_until - time.time()
         if remaining > 0:
-            raise FetchError(f"Site en pause après un blocage (encore {int(remaining // 60) + 1} min)")
+            raise BlockedError(f"Site en pause après un blocage (encore {int(remaining // 60) + 1} min)")
         try:
             resp = _session.get(url, timeout=(10, min(timeout_ms, DEFAULT_TIMEOUT_MS) / 1000))
         except requests.RequestException as e:
