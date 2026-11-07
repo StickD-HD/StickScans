@@ -2,6 +2,7 @@
 Point d'entrée unique pour récupérer le HTML d'une page. Choix par variable d'environnement :
 
 - FETCH_BACKEND=byparr      (défaut, comportement d'origine)
+- FETCH_BACKEND=http        requêtes HTTP simples, sans navigateur (voir http_client.py)
 - FETCH_BACKEND=playwright  navigateur local (voir playwright_client.py)
 - FETCH_BACKEND=remote      appelle un petit service de récupération tournant sur une autre machine
                             (FETCH_REMOTE_URL=http://IP:8765, FETCH_REMOTE_TOKEN=...)
@@ -35,6 +36,9 @@ def _remote(url: str, timeout_ms: int) -> str:
 
 
 def fetch_html(url: str, timeout_ms: int = 90000) -> str:
+    if BACKEND == "http":
+        from .http_client import fetch_html as http_fetch
+        return http_fetch(url, min(timeout_ms, 30000))
     if BACKEND == "playwright":
         from .playwright_client import fetch_html as pw_fetch
         return pw_fetch(url, timeout_ms)

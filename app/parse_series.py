@@ -86,6 +86,7 @@ def _clean_synopsis(tag):
         br.replace_with("\n")
     text = tag.get_text().strip()
     text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.removesuffix("£").rstrip()  # marqueur parasite observé en fin de synopsis
     return text or None
 
 
@@ -135,6 +136,10 @@ def parse_series_page(html: str) -> dict:
         elif "popularit" in label_text:
             digits = re.sub(r"\D", "", value_tag.get_text(strip=True))
             popularity = int(digits) if digits else None
+
+    if labels and not values:
+        # Page tronquée côté site : on refuse plutôt que d'écraser les données déjà en base par du vide.
+        raise ValueError("Fiche technique tronquée (libellés sans valeurs) : page ignorée, données conservées")
 
     last_chapter_url = None
     last_chapter_number = None
