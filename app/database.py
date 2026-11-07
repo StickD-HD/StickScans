@@ -127,7 +127,7 @@ NEW_CHAPTERS_COLUMNS = {
 @contextmanager
 def get_conn():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    # Ajout d'un timeout de 15s pour �viter le verrouillage imm�diat
+    # Ajout d'un timeout de 15s pour éviter le verrouillage immédiat
     conn = sqlite3.connect(DB_PATH, timeout=15.0)
     conn.row_factory = sqlite3.Row
     
@@ -630,15 +630,39 @@ def set_chapters_read(chapter_ids: list[int], is_read: bool):
             )
 
 
+# Au-delà de ce nombre de chapitres d'un coup, c'est un rattrapage et non une lecture : seul le dernier
+# chapitre entre alors dans l'historique (sinon les statistiques de lecture seraient faussées).
+HISTORY_GAP_MAX = 30
+
+
 def mark_read_up_to(series_id: int, number_float: float):
+    """Marque comme lus tous les chapitres jusqu'à number_float inclus.
+
+    Historique : si la série avait déjà des chapitres lus, tous ceux qui séparent la dernière lecture du
+    chapitre atteint y entrent (ex. 6 à 12 après avoir lu jusqu'au 5). Sans lecture antérieure, ou pour un
+    écart de plus de HISTORY_GAP_MAX chapitres (rattrapage), seul le chapitre atteint y est noté."""
     with get_conn() as conn:
-        # Chapitres précédents : marqués "lus" (pour la progression) mais SANS entrée dans
-        # l'historique, sinon ajouter une série déjà lue y déversait tous les anciens chapitres.
+        row = conn.execute(
+            "SELECT MAX(number_float) AS m FROM chapters WHERE series_id = ? AND is_read = 1", (series_id,)
+        ).fetchone()
+        previous_max = row["m"] if row else None
+        gap_ids = []
+        if previous_max is not None:
+            gap_ids = [
+                r["id"] for r in conn.execute(
+                    "SELECT id FROM chapters WHERE series_id = ? AND is_read = 0 "
+                    "AND number_float > ? AND number_float <= ?",
+                    (series_id, previous_max, number_float),
+                )
+            ]
+            if len(gap_ids) > HISTORY_GAP_MAX:
+                gap_ids = []
+        # Chapitres précédents : marqués lus (pour la progression), sans entrée dans l'historique...
         conn.execute(
             "UPDATE chapters SET is_read = 1 WHERE series_id = ? AND number_float < ?",
             (series_id, number_float),
         )
-        # Le chapitre réellement lu : lui seul est noté dans l'historique.
+        # ... sauf le chapitre atteint, toujours noté dans l'historique...
         conn.execute(
             """
             UPDATE chapters
@@ -647,6 +671,24 @@ def mark_read_up_to(series_id: int, number_float: float):
             """,
             (series_id, number_float),
         )
+        # ... et ceux de l'écart avec la dernière lecture.
+        if gap_ids:
+            placeholders = ",".join("?" for _ in gap_ids)
+            conn.execute(
+                f"UPDATE chapters SET read_at = COALESCE(read_at, datetime('now')) WHERE id IN ({placeholders})",
+                gap_ids,
+            )
+
+
+def mark_read_through(series_id: int, number_float: float) -> int:
+    """Marque comme lus, SANS toucher à l'historique, tous les chapitres jusqu'à number_float inclus
+    (alignement sur AniList : ce ne sont pas des lectures faites aujourd'hui). Renvoie le nombre de chapitres changés."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE chapters SET is_read = 1 WHERE series_id = ? AND is_read = 0 AND number_float <= ?",
+            (series_id, number_float),
+        )
+        return cur.rowcount
 
 
 def mark_all_read(series_id: int):

@@ -8,6 +8,7 @@ AniList ne fournit pas de jeton de rafraîchissement : le jeton dure 1 an puis d
 import base64
 import json
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -263,7 +264,12 @@ def fetch_entry(media_id: int) -> dict:
         timeout=15,
     )
     data = resp.json()
-    entry = ((data.get("data", {}) or {}).get("Media", {}) or {}).get("mediaListEntry") or {}
+    if resp.status_code != 200 or data.get("errors"):
+        raise RuntimeError(str(data.get("errors", data)))
+    media = (data.get("data") or {}).get("Media")
+    if media is None:
+        raise RuntimeError("Fiche AniList introuvable")
+    entry = media.get("mediaListEntry") or {}
     return {
         "status": entry.get("status"),
         "progress": entry.get("progress"),
@@ -338,13 +344,138 @@ def push_update(series_id: int, status=None, progress=None, score=None, start_da
 
 
 def push_progress(series_id: int):
-    """Appelé automatiquement à chaque chapitre marqué lu : pousse seulement la progression,
-    et ne fixe le statut sur CURRENT que si aucun statut n'est encore connu localement."""
+    """Appelé automatiquement à chaque chapitre marqué lu : pousse la progression vers AniList, mais seulement
+    si elle dépasse celle qu'AniList a RÉELLEMENT en ce moment (relue à chaque fois). Ainsi, lire ailleurs puis
+    cocher un vieux chapitre ici ne fait jamais reculer AniList. Le statut passe à CURRENT seulement si aucun
+    statut n'existe encore."""
     series = database.get_series_by_id(series_id)
     if not series or not series.get("anilist_id") or not _token():
         return
     progress = database.get_max_read_chapter_number(series_id)
     if progress is None:
         return
-    status = "CURRENT" if not series.get("anilist_status") else None
-    push_update(series_id, status=status, progress=progress)
+    try:
+        remote = fetch_entry(series["anilist_id"])
+    except Exception as e:
+        database.set_series_anilist_error(series_id, f"Synchro AniList impossible : {e}")
+        logger.error("Lecture de la progression AniList impossible pour %s : %s", series["title"], e)
+        return
+    database.set_series_anilist_data(series_id, **remote)  # l'appli reflète l'état réel d'AniList
+    if progress <= (remote.get("progress") or 0):
+        return
+    push_update(series_id, status=None if remote.get("status") else "CURRENT", progress=progress)
+
+
+# --- Synchro AniList -> StickScans (aucune écriture sur AniList) ---
+
+COLLECTION_QUERY = """
+query ($userName: String, $scoreFormat: ScoreFormat, $chunk: Int) {
+  MediaListCollection(userName: $userName, type: MANGA, chunk: $chunk, perChunk: 500) {
+    hasNextChunk
+    lists {
+      entries {
+        mediaId
+        status
+        progress
+        score(format: $scoreFormat)
+        startedAt { year month day }
+        completedAt { year month day }
+      }
+    }
+  }
+}
+"""
+
+SYNC_MIN_INTERVAL_SECONDS = 60
+_sync_lock = threading.Lock()
+_last_sync = 0.0
+
+
+def _fetch_collection(user_name: str) -> dict[int, dict]:
+    """Toute la liste de mangas de l'utilisateur en une ou quelques requêtes : {id AniList: entrée}."""
+    score_format = get_score_format()
+    entries: dict[int, dict] = {}
+    chunk = 1
+    while chunk <= 50:  # garde-fou : 50 x 500 entrées
+        resp = requests.post(
+            API_URL,
+            json={"query": COLLECTION_QUERY,
+                  "variables": {"userName": user_name, "scoreFormat": score_format, "chunk": chunk}},
+            headers=_headers(),
+            timeout=20,
+        )
+        if resp.status_code == 429:
+            raise RuntimeError("Limite de requêtes AniList atteinte, nouvel essai plus tard")
+        try:
+            data = resp.json()
+        except ValueError:
+            raise RuntimeError(f"Réponse AniList illisible (HTTP {resp.status_code})")
+        if resp.status_code == 401 or "Invalid token" in str(data.get("errors", "")):
+            raise ValueError(INVALID_TOKEN_MESSAGE)
+        if resp.status_code != 200 or data.get("errors"):
+            raise RuntimeError(str(data.get("errors", data)))
+        collection = (data.get("data") or {}).get("MediaListCollection")
+        if collection is None:
+            raise RuntimeError("Liste AniList introuvable")
+        for lst in collection.get("lists") or []:
+            for e in lst.get("entries") or []:
+                entries[e["mediaId"]] = {
+                    "status": e.get("status"),
+                    "progress": e.get("progress"),
+                    "score": e.get("score"),
+                    "start_date": _from_fuzzy_date(e.get("startedAt")),
+                    "end_date": _from_fuzzy_date(e.get("completedAt")),
+                }
+        if not collection.get("hasNextChunk"):
+            break
+        chunk += 1
+    return entries
+
+
+def sync_all(force: bool = False) -> dict:
+    """Recopie dans l'appli l'état AniList (statut, progression, note, dates) de toutes les séries liées, en
+    une seule passe : ce qui est modifié ailleurs (site AniList, autre appli) apparaît dans StickScans.
+    N'écrit JAMAIS sur AniList. Sans force, ignore les appels à moins d'une minute d'écart."""
+    global _last_sync
+    if not _token():
+        return {"synced": False, "updated": 0, "reason": "no_token"}
+    if not force and time.time() - _last_sync < SYNC_MIN_INTERVAL_SECONDS:
+        return {"synced": False, "updated": 0, "reason": "recent"}
+    if not _sync_lock.acquire(blocking=False):
+        return {"synced": False, "updated": 0, "reason": "busy"}
+    try:
+        linked = [s for s in database.get_all_series() if s.get("anilist_id")]
+        updated = 0
+        if linked:
+            user_name = database.get_setting("anilist_user_name")
+            if not user_name:
+                _store_profile(_fetch_viewer(_token()))
+                user_name = database.get_setting("anilist_user_name")
+            entries = _fetch_collection(user_name)
+            for s in linked:
+                entry = entries.get(s["anilist_id"], {})  # absent de la liste AniList : champs vidés
+                new = (entry.get("status"), entry.get("progress"), entry.get("score"),
+                       entry.get("start_date"), entry.get("end_date"))
+                old = (s.get("anilist_status"), s.get("anilist_progress"), s.get("anilist_score"),
+                       s.get("anilist_start_date"), s.get("anilist_end_date"))
+                if new != old:
+                    database.set_series_anilist_data(
+                        s["id"], status=new[0], progress=new[1], score=new[2], start_date=new[3], end_date=new[4]
+                    )
+                    updated += 1
+                elif s.get("anilist_last_error"):
+                    database.set_series_anilist_error(s["id"], None)
+        _last_sync = time.time()
+        database.delete_setting("anilist_token_error")
+        if updated:
+            logger.info("Synchro AniList : %d série(s) mise(s) à jour", updated)
+        return {"synced": True, "updated": updated}
+    except ValueError as e:  # jeton refusé
+        database.set_setting("anilist_token_error", str(e))
+        logger.error("Synchro AniList : %s", e)
+        return {"synced": False, "updated": 0, "reason": "invalid_token", "error": str(e)}
+    except Exception as e:
+        logger.error("Synchro AniList impossible : %s", e)
+        return {"synced": False, "updated": 0, "reason": "error", "error": str(e)}
+    finally:
+        _sync_lock.release()

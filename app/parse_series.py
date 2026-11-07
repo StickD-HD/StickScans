@@ -4,6 +4,8 @@ Extrait : titre, titres alternatifs, couverture, statut, synopsis, auteur, anné
 team, popularité, catégorie, genres, dernier chapitre, et la liste complète des chapitres.
 """
 import re
+from urllib.parse import urlparse
+
 from bs4 import BeautifulSoup
 
 CHAPTER_LINK_RE = re.compile(
@@ -14,6 +16,19 @@ ALT_NAME_RE = re.compile(r"alternativeHeadline['\"]?>([^<]+)")
 
 CHAPTER_NAME_RE = re.compile(r"Chapitre\s+([0-9]+(?:[.\-][0-9]+)?)", re.IGNORECASE)
 LINK_RANK = {"aucun": 0, "site": 1}
+SITE_HOSTS = {"scan-manga.com", "www.scan-manga.com", "m.scan-manga.com"}
+SAFE_URL_RE = re.compile(r"https?://[^\s\"'<>]+")
+
+
+def is_site_url(url: str) -> bool:
+    """Vrai pour une URL http(s) propre de scan-manga.com (sans espace, guillemet ni chevron)."""
+    return bool(SAFE_URL_RE.fullmatch(url or "")) and (urlparse(url).hostname or "").lower() in SITE_HOSTS
+
+
+def safe_image_url(url: str | None) -> str | None:
+    """Une couverture doit être une URL http(s) propre ; sinon on l'ignore."""
+    url = (url or "").strip()
+    return url if SAFE_URL_RE.fullmatch(url) else None
 
 
 def number_to_float(number, strict: bool = False) -> float:
@@ -58,8 +73,9 @@ def extract_chapters(html: str) -> list[dict]:
             number = match.group(1)
             hrefs = [a["href"].strip() for a in li.find_all("a", href=True)]
             site = next((h for h in hrefs if "/lecture-en-ligne/" in h), None)
-            if site:
-                put(number, site if site.startswith("http") else "https://www.scan-manga.com" + site, "site")
+            full = (site if site.startswith("http") else "https://www.scan-manga.com" + site) if site else ""
+            if full and is_site_url(full):
+                put(number, full, "site")
             else:
                 put(number, "", "aucun")
     except Exception:
@@ -99,7 +115,7 @@ def parse_series_page(html: str) -> dict:
     alt_names = extract_alt_names(html)
 
     cover_tag = soup.select_one('meta[property="og:image"]')
-    cover_url = cover_tag["content"] if cover_tag else None
+    cover_url = safe_image_url(cover_tag.get("content")) if cover_tag else None
 
     synopsis = _clean_synopsis(soup.select_one('p[itemprop="description"]'))
 

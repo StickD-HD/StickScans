@@ -55,6 +55,13 @@ async def lifespan(app: FastAPI):
         check_trigger = IntervalTrigger(hours=interval_hours)
     scheduler.add_job(check_all_series, check_trigger, id="check_all_series")
     scheduler.add_job(run_backup, CronTrigger(hour=3, minute=0), id="daily_backup")
+    # ANILIST_SYNC_MINUTES : fréquence de la copie de l'état AniList dans l'appli (défaut 15 ; 0 = désactivée).
+    sync_minutes = int(os.environ.get("ANILIST_SYNC_MINUTES", "15") or 0)
+    if sync_minutes > 0:
+        scheduler.add_job(
+            anilist.sync_all, IntervalTrigger(minutes=sync_minutes), id="anilist_sync",
+            kwargs={"force": True}, next_run_time=datetime.now(timezone.utc) + timedelta(seconds=20),
+        )
     scheduler.start()
     logger.info("Planificateur démarré (vérification : %s, sauvegarde quotidienne à 3h)", check_trigger)
     yield
@@ -500,9 +507,11 @@ def delete_anilist_setting():
 @app.post("/api/settings/anilist/check")
 def check_anilist_setting():
     try:
-        return anilist.check_token()
+        anilist.check_token()
     except RuntimeError as e:
         raise HTTPException(502, str(e))
+    anilist.sync_all(force=True)  # « Vérifier » recopie aussi l'état AniList de toutes les séries
+    return anilist.get_status()
 
 
 @app.post("/api/settings/anilist/client-id")
@@ -549,6 +558,32 @@ def update_anilist(series_id: int, payload: AnilistUpdateRequest):
 def unlink_anilist(series_id: int):
     anilist.unlink_series(series_id)
     return database.get_series_by_id(series_id)
+
+
+@app.post("/api/anilist/sync")
+def sync_anilist():
+    """Appelé par l'appli à l'ouverture et au retour au premier plan (au plus une synchro par minute)."""
+    return anilist.sync_all()
+
+
+@app.post("/api/series/{series_id}/anilist/align-local")
+def align_local_with_anilist(series_id: int):
+    """Marque comme lus ici (sans historique) les chapitres qu'AniList indique comme lus."""
+    series = database.get_series_by_id(series_id)
+    if not series:
+        raise HTTPException(404, "Série introuvable")
+    if not series.get("anilist_id"):
+        raise HTTPException(400, "Cette série n'est pas liée à AniList")
+    try:  # valeur à jour ; si AniList est injoignable, on se fie à la dernière valeur connue
+        entry = anilist.fetch_entry(series["anilist_id"])
+        database.set_series_anilist_data(series_id, **entry)
+        progress = entry.get("progress")
+    except Exception:
+        progress = series.get("anilist_progress")
+    if not progress:
+        raise HTTPException(400, "AniList n'indique aucun chapitre lu pour cette série")
+    changed = database.mark_read_through(series_id, float(progress))
+    return {"progress": progress, "changed": changed, "series": database.get_series_by_id(series_id)}
 
 
 @app.delete("/api/series/{series_id}")

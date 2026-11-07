@@ -497,3 +497,12 @@ main#library { padding: 0 18px; }
 
 /* --- Retour par glissement : pas de rebond horizontal --- */
 html, body { overscroll-behavior-x: none; }
+/* Bandeau « aligner sur AniList » dans la fiche d'une série */
+#anilist-align-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  margin: 12px 0 0; padding: 10px 12px;
+  background: var(--accent-soft); border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: 0.85rem;
+}
+#anilist-align-banner.hidden { display: none; }
+#anilist-align-text { flex: 1 1 200px; }

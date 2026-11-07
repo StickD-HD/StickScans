@@ -150,6 +150,7 @@ let currentSeriesId = null;
 let activeCategoryId = "";
 let searchDebounce = null;
 let currentChapters = [];
+let currentAnilistProgress = null; // progression AniList de la série ouverte (null = non liée)
 let selectionMode = false;
 let selectedChapterIds = new Set();
 let lastTopView = "library-view";
@@ -191,9 +192,12 @@ function closeModal(el) {
 });
 
 function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function formatDateBucket(dateStr) {
@@ -324,7 +328,7 @@ function renderGroupedList(container, items, dateField, labelFn, showTime = fals
     const row = document.createElement("div");
     row.className = "update-row";
     row.innerHTML = `
-      <img src="${item.series_cover || ""}" alt="" loading="lazy">
+      <img src="${escapeHtml(item.series_cover)}" alt="" loading="lazy">
       <span>${labelFn(item)}${showTime ? `<small class="update-time">${formatTimeLabel(item[dateField])}</small>` : ""}</span>
     `;
     row.addEventListener("click", () => openChaptersView(item.series_id));
@@ -386,7 +390,7 @@ function renderHistoryList(container, items) {
     const row = document.createElement("div");
     row.className = "update-row";
     row.innerHTML = `
-      <img src="${group.series_cover || ""}" alt="" loading="lazy">
+      <img src="${escapeHtml(group.series_cover)}" alt="" loading="lazy">
       <span>${label}${count > 1 ? `<small class="update-time">${count} chapitres</small>` : ""}</span>
       <button class="history-remove-btn" title="Retirer de l'historique" aria-label="Retirer de l'historique">✕</button>
     `;
@@ -865,7 +869,7 @@ async function loadLibrary() {
     card.className = "card";
     card.innerHTML = `
       <div class="cover-wrap">
-        <img src="${s.cover_url || ""}" alt="" loading="lazy">
+        <img src="${escapeHtml(s.cover_url)}" alt="" loading="lazy">
         <div class="badge-stack">
           ${s.unread_count > 0 ? `<span class="badge">${s.unread_count}</span>` : ""}
           ${s.last_error ? `<span class="badge badge-error" title="${escapeHtml(s.last_error)}">⚠️</span>` : ""}
@@ -873,7 +877,7 @@ async function loadLibrary() {
       </div>
       <div class="info">
         <div class="title">${escapeHtml(s.title || "Sans titre")}</div>
-        <div class="chapter">${s.last_chapter_number ? "Ch. " + s.last_chapter_number : "?"}</div>
+        <div class="chapter">${s.last_chapter_number ? "Ch. " + escapeHtml(s.last_chapter_number) : "?"}</div>
       </div>
     `;
     card.addEventListener("click", () => openChaptersView(s.id));
@@ -883,6 +887,9 @@ async function loadLibrary() {
 
 async function openChaptersView(seriesId) {
   currentSeriesId = seriesId;
+  currentChapters = [];
+  currentAnilistProgress = null;
+  anilistAlignBanner.classList.add("hidden");
   selectionMode = false;
   selectedChapterIds.clear();
   selectModeBtn.textContent = "Sélectionner";
@@ -900,6 +907,7 @@ async function openChaptersView(seriesId) {
   }
   await loadSeriesDetail();
   await loadChapters();
+  syncAnilist(); // en arrière-plan : récupère ce qui a changé sur AniList depuis la dernière fois
 }
 
 async function loadSeriesDetail() {
@@ -984,7 +992,7 @@ function updateContinueReadingButton() {
   continueReadingBtn.textContent = `Continuer la lecture : Chapitre ${next.number}`;
   continueReadingBtn.classList.remove("hidden");
   continueReadingBtn.onclick = () => {
-    window.open(next.url, "_blank");
+    window.open(next.url, "_blank", "noopener");
     markReadUpTo(next.number);
   };
 }
@@ -993,6 +1001,7 @@ async function loadChapters() {
   const res = await fetch(`/api/series/${currentSeriesId}/chapters`);
   currentChapters = await res.json();
   updateContinueReadingButton();
+  updateAlignBanner();
 
   chaptersList.innerHTML = "";
   for (const c of currentChapters) {
@@ -1048,7 +1057,7 @@ async function loadChapters() {
       });
       li.addEventListener("click", () => {
         if (noLink) return; // rien à ouvrir : on peut quand même cocher le chapitre comme lu
-        window.open(c.url, "_blank");
+        window.open(c.url, "_blank", "noopener");
         markReadUpTo(c.number);
       });
     }
@@ -1157,6 +1166,68 @@ synopsisToggle.addEventListener("click", () => {
 editSeriesBtn.addEventListener("click", () => editForm.classList.toggle("hidden"));
 editCancelBtn.addEventListener("click", () => editForm.classList.add("hidden"));
 
+// --- Alignement StickScans <- AniList, et synchro automatique de l'état AniList ---
+const anilistAlignBanner = document.getElementById("anilist-align-banner");
+const anilistAlignText = document.getElementById("anilist-align-text");
+const anilistAlignBtn = document.getElementById("anilist-align-btn");
+
+// Propose de marquer comme lus ici les chapitres qu'AniList indique comme lus mais qui ne le sont pas dans l'appli.
+function updateAlignBanner() {
+  const progress = currentAnilistProgress;
+  const missing = progress > 0
+    ? currentChapters.filter((c) => !c.is_read && c.number_float <= progress).length
+    : 0;
+  anilistAlignBanner.classList.toggle("hidden", missing === 0);
+  if (missing === 0) return;
+  const s = (n) => (n > 1 ? "s" : "");
+  anilistAlignText.textContent =
+    `AniList indique ${progress} chapitre${s(progress)} lu${s(progress)}, mais ${missing} ${missing > 1 ? "ne sont" : "n'est"} pas marqué${s(missing)} comme lu${s(missing)} ici.`;
+  anilistAlignBtn.textContent = `Marquer ${missing} chapitre${s(missing)} comme lu${s(missing)}`;
+}
+
+anilistAlignBtn.addEventListener("click", async () => {
+  if (!confirm("Marquer ces chapitres comme lus dans StickScans ? Ils n'apparaîtront pas dans l'historique.")) return;
+  anilistAlignBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/series/${currentSeriesId}/anilist/align-local`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.detail || "Alignement impossible");
+      return;
+    }
+    await loadSeriesDetail();
+    await loadChapters();
+  } catch (e) {
+    alert("Impossible de joindre le serveur");
+  } finally {
+    anilistAlignBtn.disabled = false;
+  }
+});
+
+// Demande au serveur de recopier l'état AniList (au plus une fois par minute côté serveur).
+// À l'ouverture de l'appli, à l'ouverture d'une fiche et au retour sur l'appli : on y voit ainsi ce qui a été
+// modifié ailleurs. Une fiche ouverte est rafraîchie, sauf si son formulaire AniList est déplié (saisie en cours).
+let anilistSyncing = false;
+async function syncAnilist() {
+  if (anilistSyncing) return;
+  anilistSyncing = true;
+  try {
+    const res = await fetch("/api/anilist/sync", { method: "POST" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.updated > 0 && !chaptersView.classList.contains("hidden") && anilistLinked.classList.contains("hidden")) {
+      await loadSeriesDetail();
+    }
+  } catch (e) {
+    // hors ligne ou serveur occupé : on réessaiera au prochain retour sur l'appli
+  } finally {
+    anilistSyncing = false;
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") syncAnilist();
+});
+
 function renderAnilistSection(s) {
   if (s.anilist_id) {
     anilistActionBtn.textContent = "✓ " + (s.anilist_title || "AniList");
@@ -1177,6 +1248,8 @@ function renderAnilistSection(s) {
     anilistSearchResults.innerHTML = "";
     anilistSearchInput.value = s.title || "";
   }
+  currentAnilistProgress = s.anilist_id ? (s.anilist_progress || 0) : null;
+  updateAlignBanner();
   // Repliée par défaut à chaque (re)chargement de la fiche.
   anilistLinked.classList.add("hidden");
 }
@@ -1209,7 +1282,7 @@ anilistSearchBtn.addEventListener("click", async () => {
       const li = document.createElement("li");
       li.className = "anilist-result-row";
       li.innerHTML = `
-        <img src="${r.cover_url || ""}" alt="" loading="lazy">
+        <img src="${escapeHtml(r.cover_url)}" alt="" loading="lazy">
         <span>${escapeHtml(r.title)}${r.year ? " (" + r.year + ")" : ""}</span>
       `;
       li.addEventListener("click", async () => {
@@ -1573,3 +1646,5 @@ async function init() {
 }
 
 init();
+
+syncAnilist();
