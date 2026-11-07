@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     run_backup()
     # CHECK_INTERVAL_HOURS : fréquence des vérifications (défaut : toutes les heures).
     # CHECK_OFFSET_MINUTES : si défini, les vérifications tombent à cette minute pile de l'heure
-    # (ex. 30 => xx:30), pratique pour décaler deux instances qui partagent le même Byparr.
+    # (ex. 30 => xx:30), pratique pour décaler deux instances qui interrogent le même site.
     interval_hours = max(1, int(os.environ.get("CHECK_INTERVAL_HOURS", "1") or 1))
     offset = os.environ.get("CHECK_OFFSET_MINUTES", "").strip()
     if offset:

@@ -20,10 +20,8 @@ from pathlib import Path
 
 logger = logging.getLogger("manhwa-tracker.cache")
 
-# Activation automatique : si un dossier est monté sur /app/cache, le partage est actif (mode "both").
-# Les variables SCRAPE_CACHE_* restent possibles pour un réglage manuel.
-_default_dir = Path("/app/cache")
-CACHE_DIR = Path(os.environ["SCRAPE_CACHE_DIR"]) if os.environ.get("SCRAPE_CACHE_DIR") else (_default_dir if _default_dir.is_dir() else None)
+# Activation : définir SCRAPE_CACHE_DIR (le partage passe alors en mode "both" sauf SCRAPE_CACHE_MODE).
+CACHE_DIR = Path(os.environ["SCRAPE_CACHE_DIR"]) if os.environ.get("SCRAPE_CACHE_DIR") else None
 MODE = os.environ.get("SCRAPE_CACHE_MODE", "").strip().lower() or ("both" if CACHE_DIR else "off")
 if MODE not in ("off", "read", "write", "both"):
     MODE = "off"

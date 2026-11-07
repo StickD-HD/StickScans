@@ -1,5 +1,5 @@
 """
-Logique de vérification : appelle Byparr, parse, met à jour la base (métadonnées + chapitres).
+Logique de vérification : récupère la page (fetcher), parse, met à jour la base (métadonnées + chapitres).
 Garde aussi un état de progression en mémoire, consultable via get_progress().
 """
 from urllib.parse import urlparse
@@ -123,7 +123,7 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False) -> dict:
         new_numbers = [c["number"] for c in database.update_series_result(series["id"], parsed)]
         if source == "site":
             scrape_cache.write(series["url"], html)  # sans effet hors du mode « write »
-    except Exception as e:  # une série en échec (réseau, Byparr, page illisible) ne doit pas bloquer les autres
+    except Exception as e:  # une série en échec (réseau, page illisible) ne doit pas bloquer les autres
         error = str(e) or e.__class__.__name__
         database.update_series_error(series["id"], error)
     duration = time.monotonic() - started

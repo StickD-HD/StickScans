@@ -1,51 +1,63 @@
 """
-Point d'entrée unique pour récupérer le HTML d'une page. Choix par variable d'environnement :
+Récupération d'une page série de scan-manga.com par simple requête HTTP (requests), sans navigateur.
+Interface : fetch_html(url, timeout_ms) -> str ; erreurs : FetchError.
 
-- FETCH_BACKEND=byparr      (défaut, comportement d'origine)
-- FETCH_BACKEND=http        requêtes HTTP simples, sans navigateur (voir http_client.py)
-- FETCH_BACKEND=playwright  navigateur local (voir playwright_client.py)
-- FETCH_BACKEND=remote      appelle un petit service de récupération tournant sur une autre machine
-                            (FETCH_REMOTE_URL=http://IP:8765, FETCH_REMOTE_TOKEN=...)
+Règles :
+- User-Agent honnête (identifie l'appli, pas un navigateur) ; contact facultatif via FETCH_CONTACT ;
+- aucun contournement : sur 403 / 429 / page de challenge, on s'arrête et on met le site en pause
+  (FETCH_BLOCK_COOLDOWN_MINUTES, défaut 60) : plus aucune requête n'est envoyée pendant ce temps ;
+- on ne renvoie le HTML que si la vraie page série est là (h2[itemprop*="headline"]).
 """
 import os
+import re
+import threading
+import time
 
 import requests
 
-from .playwright_client import FetchError
+CONTACT = os.environ.get("FETCH_CONTACT", "").strip()
+USER_AGENT = "ScanMangaMetadataCollector/1.0" + (f" (+{CONTACT})" if CONTACT else "")
+COOLDOWN_SECONDS = max(1, int(os.environ.get("FETCH_BLOCK_COOLDOWN_MINUTES", "60") or 60)) * 60
+CHALLENGE_MARKERS = ("cf-chl", "Just a moment", "captcha-delivery", "Attention Required", "ddos-guard")
+READY_RE = re.compile(r'<h2[^>]*itemprop="[^"]*headline')
+DEFAULT_TIMEOUT_MS = 30000
 
-BACKEND = os.environ.get("FETCH_BACKEND", "byparr").strip().lower()
-REMOTE_URL = os.environ.get("FETCH_REMOTE_URL", "").rstrip("/")
-REMOTE_TOKEN = os.environ.get("FETCH_REMOTE_TOKEN", "")
+_session = requests.Session()
+_session.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "fr-FR,fr;q=0.9"})
+_lock = threading.Lock()
+_blocked_until = 0.0
 
 
-def _remote(url: str, timeout_ms: int) -> str:
-    if not REMOTE_URL:
-        raise FetchError("FETCH_REMOTE_URL n'est pas défini")
-    try:
-        resp = requests.get(
-            f"{REMOTE_URL}/fetch",
-            params={"url": url, "timeout_ms": timeout_ms},
-            headers={"X-Token": REMOTE_TOKEN},
-            timeout=(10, timeout_ms / 1000 + 30),
-        )
-    except requests.RequestException as e:
-        raise FetchError(f"Service de récupération injoignable : {e}") from e
+class FetchError(Exception):
+    pass
+
+
+def _block(reason: str) -> FetchError:
+    global _blocked_until
+    _blocked_until = time.time() + COOLDOWN_SECONDS
+    return FetchError(f"{reason} : collecte suspendue {COOLDOWN_SECONDS // 60} min, aucun contournement tenté")
+
+
+def fetch_html(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> str:
+    with _lock:
+        remaining = _blocked_until - time.time()
+        if remaining > 0:
+            raise FetchError(f"Site en pause après un blocage (encore {int(remaining // 60) + 1} min)")
+        try:
+            resp = _session.get(url, timeout=(10, min(timeout_ms, DEFAULT_TIMEOUT_MS) / 1000))
+        except requests.RequestException as e:
+            raise FetchError(f"Site injoignable : {e}") from e
+
+    if resp.status_code in (403, 429):
+        raise _block(f"HTTP {resp.status_code}")
+    if resp.status_code == 404:
+        raise FetchError("HTTP 404 : fiche introuvable (URL changée ?)")
     if resp.status_code != 200:
-        raise FetchError(f"Service de récupération : HTTP {resp.status_code} — {resp.text[:300]}")
-    return resp.text
+        raise FetchError(f"HTTP {resp.status_code}")
 
-
-def fetch_html(url: str, timeout_ms: int = 90000) -> str:
-    if BACKEND == "http":
-        from .http_client import fetch_html as http_fetch
-        return http_fetch(url, min(timeout_ms, 30000))
-    if BACKEND == "playwright":
-        from .playwright_client import fetch_html as pw_fetch
-        return pw_fetch(url, timeout_ms)
-    if BACKEND == "remote":
-        return _remote(url, timeout_ms)
-    from .byparr_client import ByparrError, fetch_html as byparr_fetch
-    try:
-        return byparr_fetch(url, timeout_ms)
-    except ByparrError as e:
-        raise FetchError(str(e)) from e
+    html = resp.content.decode("utf-8", errors="replace")
+    if any(m in html[:5000] for m in CHALLENGE_MARKERS) and not READY_RE.search(html):
+        raise _block("Page de challenge reçue")
+    if not READY_RE.search(html):
+        raise FetchError(f"Page reçue ({len(html)} octets) sans titre de série : structure du site changée ?")
+    return html

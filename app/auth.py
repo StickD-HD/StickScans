@@ -6,7 +6,7 @@ Configuration (variables d'environnement) :
 - AUTH_USERNAME      : identifiant (défaut : "admin").
 - AUTH_SECRET        : clé de signature des sessions. Si absente, une clé aléatoire est
                        générée et conservée dans data/auth_secret (les sessions survivent
-                       aux redémarrages du conteneur).
+                       aux redémarrages du service).
 - AUTH_SESSION_DAYS  : durée d'une session en jours (défaut : 30).
 - AUTH_COOKIE_NAME   : nom du cookie de session. À changer si plusieurs instances tournent sur le
                        même serveur (les cookies ne sont pas séparés par port).
