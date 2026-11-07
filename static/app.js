@@ -869,7 +869,6 @@ async function loadLibrary() {
           ${s.unread_count > 0 ? `<span class="badge">${s.unread_count}</span>` : ""}
           ${s.last_error ? `<span class="badge badge-error" title="${escapeHtml(s.last_error)}">⚠️</span>` : ""}
         </div>
-        ${s.status ? `<span class="status-flag ${statusClass(s.status)}">${escapeHtml(s.status)}</span>` : ""}
       </div>
       <div class="info">
         <div class="title">${escapeHtml(s.title || "Sans titre")}</div>
