@@ -797,108 +797,51 @@ def get_reading_stats(tz_offset_minutes: int = 0) -> dict:
         }
 
 
-def get_reading_overview(tz_offset_minutes: int = 0, minutes_per_chapter: int = 5) -> dict:
-    """Statistiques détaillées de lecture, avec une durée estimée de `minutes_per_chapter` par chapitre.
+READING_PERIOD_DAYS = {"week": 7, "month": 30, "all": None}
 
-    Seuls les chapitres de l'historique (read_at renseigné) comptent comme du temps passé à lire : ceux marqués
-    lus en rattrapage ou alignés sur AniList n'ont pas été lus ici. Les jours sont ceux de l'utilisateur
-    (tz_offset_minutes : Paris en été = +120)."""
-    from collections import Counter
 
+def get_reading_summary(period: str = "week", tz_offset_minutes: int = 0, minutes_per_chapter: int = 5,
+                        limit: int = 12) -> dict:
+    """Temps passé à lire sur une période (« week » : 7 jours, « month » : 30 jours, « all » : depuis le début),
+    avec le classement des séries, à raison de `minutes_per_chapter` minutes par chapitre.
+
+    Seuls les chapitres de l'historique (read_at renseigné) comptent : ceux marqués lus en rattrapage ou alignés
+    sur AniList n'ont pas été lus ici. Les jours sont ceux de l'utilisateur (tz_offset_minutes : Paris en été = +120)."""
     mpc = max(1, int(minutes_per_chapter))
+    if period not in READING_PERIOD_DAYS:
+        period = "week"
+    days = READING_PERIOD_DAYS[period]
     modifier = f"{tz_offset_minutes:+d} minutes"
+    today = (datetime.now(timezone.utc) + timedelta(minutes=tz_offset_minutes)).date()
+    start_day = (today - timedelta(days=days - 1)).isoformat() if days else "0000-01-01"
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT series_id, date(read_at, ?) AS d, strftime('%H', read_at, ?) AS h, strftime('%w', read_at, ?) AS w "
-            "FROM chapters WHERE read_at IS NOT NULL",
-            (modifier, modifier, modifier),
+            """
+            SELECT s.id, s.title, s.url, s.cover_url, COUNT(*) AS n
+            FROM chapters c JOIN series s ON s.id = c.series_id
+            WHERE c.read_at IS NOT NULL AND date(c.read_at, ?) >= ?
+            GROUP BY s.id
+            ORDER BY n DESC, s.title
+            """,
+            (modifier, start_day),
         ).fetchall()
-        titles = {r["id"]: (r["title"] or r["url"]) for r in conn.execute("SELECT id, title, url FROM series")}
-        genre_rows = conn.execute(
-            "SELECT sg.series_id, g.name FROM series_genres sg JOIN genres g ON g.id = sg.genre_id"
-        ).fetchall()
-        marked_read = conn.execute("SELECT COUNT(*) FROM chapters WHERE is_read = 1").fetchone()[0]
-
-    per_day = Counter(r["d"] for r in rows)
-    per_series = Counter(r["series_id"] for r in rows)
-    per_hour = Counter(int(r["h"]) for r in rows)
-    per_weekday = Counter(int(r["w"]) for r in rows)  # 0 = dimanche
-    genres_of: dict[int, list[str]] = {}
-    for r in genre_rows:
-        genres_of.setdefault(r["series_id"], []).append(r["name"])
-    per_genre: Counter = Counter()
-    for series_id, n in per_series.items():
-        for genre in genres_of.get(series_id, []):
-            per_genre[genre] += n
-
-    today = (datetime.now(timezone.utc) + timedelta(minutes=tz_offset_minutes)).date()
-
-    def count_on(day) -> int:
-        return per_day.get(day.isoformat(), 0)
-
-    last_30 = [
-        {"date": (today - timedelta(days=i)).isoformat(), "count": count_on(today - timedelta(days=i)),
-         "minutes": count_on(today - timedelta(days=i)) * mpc}
-        for i in range(29, -1, -1)
-    ]
-
-    months = []
-    year, month = today.year, today.month
-    for _ in range(12):
-        key = f"{year:04d}-{month:02d}"
-        n = sum(c for d, c in per_day.items() if d.startswith(key))
-        months.append({"month": key, "count": n, "minutes": n * mpc})
-        month -= 1
-        if month == 0:
-            year, month = year - 1, 12
-    months.reverse()
-
-    days_sorted = sorted(datetime.fromisoformat(d).date() for d in per_day)
-    best_streak = run = 0
-    previous = None
-    for day in days_sorted:
-        run = run + 1 if previous is not None and (day - previous).days == 1 else 1
-        best_streak = max(best_streak, run)
-        previous = day
-    day = today if count_on(today) else today - timedelta(days=1)
-    streak = 0
-    while count_on(day):
-        streak += 1
-        day -= timedelta(days=1)
-
-    best_day = None
-    if per_day:
-        d, n = max(per_day.items(), key=lambda kv: (kv[1], kv[0]))
-        best_day = {"date": d, "count": n, "minutes": n * mpc}
-
-    total = len(rows)
-    top_series = [
-        {"series_id": sid, "title": titles.get(sid, "?"), "count": n, "minutes": n * mpc}
-        for sid, n in per_series.most_common(10)
-    ]
-    weekday_order = [1, 2, 3, 4, 5, 6, 0]  # lundi en premier
+        since = conn.execute(
+            "SELECT MIN(date(read_at, ?)) FROM chapters WHERE read_at IS NOT NULL", (modifier,)
+        ).fetchone()[0]
+    chapters = sum(r["n"] for r in rows)
     return {
+        "period": period,
         "minutes_per_chapter": mpc,
-        "tracked_chapters": total,
-        "marked_read_chapters": marked_read,
-        "series_count": len(per_series),
-        "total_minutes": total * mpc,
-        "today_minutes": count_on(today) * mpc,
-        "week_minutes": sum(count_on(today - timedelta(days=i)) for i in range(7)) * mpc,
-        "month_minutes": sum(count_on(today - timedelta(days=i)) for i in range(30)) * mpc,
-        "active_days": len(per_day),
-        "avg_minutes_per_active_day": round(total * mpc / len(per_day)) if per_day else 0,
-        "best_day": best_day,
-        "streak_days": streak,
-        "best_streak_days": best_streak,
-        "first_read_date": days_sorted[0].isoformat() if days_sorted else None,
-        "last_30_days": last_30,
-        "months": months,
-        "weekdays": [{"count": per_weekday.get(w, 0), "minutes": per_weekday.get(w, 0) * mpc} for w in weekday_order],
-        "hours": [{"hour": h, "count": per_hour.get(h, 0), "minutes": per_hour.get(h, 0) * mpc} for h in range(24)],
-        "top_series": top_series,
-        "others_minutes": (total - sum(s["count"] for s in top_series)) * mpc,
-        "top_genres": [{"name": g, "count": n, "minutes": n * mpc} for g, n in per_genre.most_common(8)],
+        "total_minutes": chapters * mpc,
+        "chapters": chapters,
+        "series_count": len(rows),
+        "since": since,
+        "series": [
+            {"series_id": r["id"], "title": r["title"] or r["url"], "cover_url": r["cover_url"],
+             "count": r["n"], "minutes": r["n"] * mpc}
+            for r in rows[:limit]
+        ],
+        "more": max(0, len(rows) - limit),
     }
 
 

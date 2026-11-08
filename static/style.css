@@ -527,34 +527,32 @@ html, body { overscroll-behavior-x: none; }
 #chapters-count { margin: 10px 14px 4px; }
 
 /* Aperçu de lecture */
-#reading-content { padding: 0 14px 24px; }
-#reading-content > .section-label { margin: 0 0 8px; }
-.rv-tiles { padding: 4px 0 12px; }
-.rv-columns { display: flex; align-items: stretch; gap: 3px; height: 120px; }
-.rv-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
-.rv-bar { position: relative; flex: 1; width: 100%; }
-.rv-bar i {
-  position: absolute; bottom: 0; left: 50%; width: 100%; max-width: 22px; transform: translateX(-50%);
-  border-radius: 4px 4px 2px 2px; background: var(--border);
+#reading-content { padding: 0 14px 32px; }
+.rv-hero { padding: 22px 2px 0; }
+.rv-total { display: flex; align-items: baseline; flex-wrap: wrap; line-height: 1; }
+.rv-num { font-size: 3.6rem; font-weight: 800; letter-spacing: -0.04em; }
+.rv-unit { margin: 0 12px 0 5px; font-size: 1.25rem; font-weight: 700; color: var(--muted); }
+.rv-caption { margin-top: 12px; font-size: 0.85rem; color: var(--muted); }
+.rv-periods { display: flex; gap: 8px; margin: 22px 0 18px; }
+.rv-periods .tab {
+  padding: 8px 18px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--muted); font-size: 0.85rem; font-weight: 700; cursor: pointer;
 }
-.rv-bar i.on { background: linear-gradient(180deg, var(--accent), var(--accent2)); }
-.rv-col b { height: 16px; font-size: 0.6rem; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: visible; }
-.rv-hbars { display: flex; flex-direction: column; gap: 9px; }
-.rv-hrow { display: grid; grid-template-columns: minmax(70px, 34%) 1fr auto; align-items: center; gap: 8px; }
-.rv-hlabel { font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rv-htrack { height: 10px; border-radius: var(--radius-pill); background: var(--surface-high); overflow: hidden; }
-.rv-htrack i { display: block; height: 100%; border-radius: var(--radius-pill); background: linear-gradient(90deg, var(--accent), var(--accent2)); }
-.rv-hvalue { min-width: 54px; text-align: right; font-size: 0.78rem; font-weight: 700; }
-.rv-hvalue small { display: block; font-size: 0.64rem; font-weight: 500; color: var(--muted); }
-.rv-donut-wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.rv-donut {
-  position: relative; width: 132px; height: 132px; flex: none; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
+.rv-periods .tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.rv-list { display: flex; flex-direction: column; gap: 10px; }
+.rv-row {
+  display: grid; grid-template-columns: var(--w) auto minmax(0, 1fr); align-items: center;
+  height: 70px; border-radius: 16px; overflow: hidden; background: var(--surface);
 }
-.rv-donut::before { content: ""; position: absolute; inset: 22px; border-radius: 50%; background: var(--surface); }
-.rv-donut span { position: relative; font-size: 0.85rem; font-weight: 800; text-align: center; }
-.rv-legend { flex: 1 1 150px; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
-.rv-legend li { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; min-width: 0; }
-.rv-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.rv-legend-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rv-legend-val { color: var(--muted); font-weight: 700; }
+.rv-bar { height: 100%; background: linear-gradient(90deg, hsl(var(--hue) 40% 11%), hsl(var(--hue) 58% 32%)); }
+.rv-cover { display: block; width: 50px; height: 100%; object-fit: cover; background: var(--surface-high); }
+.rv-text { min-width: 0; padding: 0 14px 0 12px; }
+.rv-title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 0.9rem; font-weight: 700; line-height: 1.25;
+}
+.rv-time { margin-top: 4px; font-size: 0.82rem; font-weight: 700; color: var(--accent2); }
+.rv-time span { font-weight: 500; color: var(--muted); }
+.rv-more, .rv-empty, .rv-foot { margin: 14px 2px 0; font-size: 0.78rem; color: var(--muted); }
+.rv-empty { padding: 28px 0; text-align: center; font-size: 0.9rem; }
+.rv-foot { margin-top: 22px; }

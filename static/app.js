@@ -1658,9 +1658,12 @@ function statusClass(status) {
   return "status-other";
 }
 
-// --- Aperçu de lecture (Réglages) : statistiques et graphiques, sans bibliothèque externe ---
+// --- Aperçu de lecture (Réglages) : temps passé à lire et classement des séries ---
 const readingView = document.getElementById("reading-view");
 topViews["reading-view"] = readingView; // ouvert depuis Réglages, pas dans la barre du bas
+let readingPeriod = "week";
+const READING_PERIODS = [["week", "Semaine"], ["month", "Mois"], ["all", "Tout"]];
+const READING_PERIOD_LABELS = { week: "7 derniers jours", month: "30 derniers jours", all: "Depuis le début" };
 
 document.getElementById("open-reading-btn").addEventListener("click", () => {
   goToTopView("reading-view");
@@ -1678,133 +1681,76 @@ function fmtReadingTime(minutes) {
   return rest ? `${h} h ${String(rest).padStart(2, "0")}` : `${h} h`;
 }
 
-function fmtShortDate(iso) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+// Grand chiffre : « 2 h 35 » avec des unités plus discrètes que les nombres.
+function fmtBigTime(minutes) {
+  const m = Math.round(minutes);
+  const part = (n, unit) => `<span class="rv-num">${n}</span><span class="rv-unit">${unit}</span>`;
+  if (m < 60) return part(m, "min");
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return rest ? part(h, "h") + part(String(rest).padStart(2, "0"), "min") : part(h, "h");
 }
 
-// Histogramme vertical : items = [{minutes, label, title}]
-function renderColumns(items, labelEvery = 1) {
-  const max = Math.max(1, ...items.map((i) => i.minutes));
-  const cols = items.map((it, idx) => {
-    const height = it.minutes === 0 ? 2 : Math.max(6, Math.round((it.minutes / max) * 100));
-    const label = idx % labelEvery === 0 ? escapeHtml(it.label) : "";
-    return `<div class="rv-col" title="${escapeHtml(it.title)}"><div class="rv-bar"><i class="${it.minutes ? "on" : ""}" style="height:${height}%"></i></div><b>${label}</b></div>`;
-  });
-  return `<div class="rv-columns">${cols.join("")}</div>`;
-}
-
-// Barres horizontales classées : items = [{label, minutes, count}]
-function renderHBars(items) {
-  const max = Math.max(1, ...items.map((i) => i.minutes));
-  const rows = items.map((it) => `
-    <div class="rv-hrow">
-      <div class="rv-hlabel" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</div>
-      <div class="rv-htrack"><i style="width:${Math.max(3, Math.round((it.minutes / max) * 100))}%"></i></div>
-      <div class="rv-hvalue">${fmtReadingTime(it.minutes)}<small>${it.count} ch.</small></div>
-    </div>`);
-  return `<div class="rv-hbars">${rows.join("")}</div>`;
-}
-
-// Anneau de répartition du temps entre les séries les plus lues
-const RV_PALETTE = ["#4C8DFF", "#35D6C4", "#A78BFA", "#F5C451", "#F0645C", "#3DDC97", "#7C89AC"];
-function renderDonut(items, total) {
-  if (total <= 0) return "";
-  let acc = 0;
-  const stops = items.map((it, i) => {
-    const start = acc;
-    acc += (it.minutes / total) * 100;
-    return `${RV_PALETTE[i]} ${start.toFixed(2)}% ${acc.toFixed(2)}%`;
-  });
-  const legend = items.map((it, i) => `
-    <li><span class="rv-dot" style="background:${RV_PALETTE[i]}"></span>
-      <span class="rv-legend-name">${escapeHtml(it.label)}</span>
-      <span class="rv-legend-val">${Math.round((it.minutes / total) * 100)} %</span></li>`);
-  return `<div class="rv-donut-wrap">
-    <div class="rv-donut" style="background:conic-gradient(${stops.join(",")})"><span>${fmtReadingTime(total)}</span></div>
-    <ul class="rv-legend">${legend.join("")}</ul></div>`;
+// Chaque série garde toujours la même teinte, déduite de son titre.
+function seriesHue(title) {
+  let h = 0;
+  for (const ch of title || "") h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return h;
 }
 
 function renderReadingOverview(d) {
-  if (!d.tracked_chapters) {
-    return `<p class="section-label">Aucune lecture enregistrée pour l'instant. Dès que tu marques des chapitres comme lus, tes statistiques apparaissent ici.</p>`;
-  }
-  const tile = (value, label) => `<div class="stat-box"><strong>${value}</strong><span>${label}</span></div>`;
   const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
+  const chips = READING_PERIODS.map(
+    ([key, label]) => `<button type="button" class="tab${key === d.period ? " active" : ""}" data-period="${key}">${label}</button>`,
+  ).join("");
 
-  const tiles = [
-    tile(fmtReadingTime(d.total_minutes), "temps de lecture total"),
-    tile(fmtReadingTime(d.today_minutes), "aujourd'hui"),
-    tile(fmtReadingTime(d.week_minutes), "7 derniers jours"),
-    tile(fmtReadingTime(d.month_minutes), "30 derniers jours"),
-    tile(d.tracked_chapters, "chapitres lus"),
-    tile(d.series_count, d.series_count > 1 ? "séries lues" : "série lue"),
-    tile(d.streak_days, d.streak_days > 1 ? "jours d'affilée" : "jour d'affilée"),
-    tile(plural(d.best_streak_days, "jour", "jours"), "record d'affilée"),
-    tile(fmtReadingTime(d.avg_minutes_per_active_day), "par jour de lecture"),
-    d.best_day ? tile(fmtReadingTime(d.best_day.minutes), `record · ${fmtShortDate(d.best_day.date)}`) : "",
-  ].join("");
+  let list;
+  if (!d.series.length) {
+    list = `<p class="rv-empty">Rien lu sur cette période.</p>`;
+  } else {
+    const max = Math.max(1, d.series[0].minutes);
+    const rows = d.series.map((s) => {
+      const width = 8 + Math.round((34 * s.minutes) / max); // la plus lue occupe 42 % de la ligne
+      return `<div class="rv-row" style="--w:${width}%;--hue:${seriesHue(s.title)}">
+        <div class="rv-bar"></div>
+        <img class="rv-cover" src="${escapeHtml(s.cover_url)}" alt="" loading="lazy">
+        <div class="rv-text">
+          <div class="rv-title">${escapeHtml(s.title)}</div>
+          <div class="rv-time">${fmtReadingTime(s.minutes)}<span> · ${plural(s.count, "chapitre", "chapitres")}</span></div>
+        </div>
+      </div>`;
+    });
+    const more = d.more > 0 ? `<p class="rv-more">+ ${plural(d.more, "autre série", "autres séries")}</p>` : "";
+    list = `<div class="rv-list">${rows.join("")}</div>${more}`;
+  }
 
-  const days = renderColumns(
-    d.last_30_days.map((x) => ({
-      minutes: x.minutes,
-      label: String(new Date(x.date + "T12:00:00").getDate()),
-      title: `${fmtShortDate(x.date)} : ${fmtReadingTime(x.minutes)} (${x.count} ch.)`,
-    })),
-    5,
-  );
-  const months = renderColumns(
-    d.months.map((x) => {
-      const date = new Date(x.month + "-15T12:00:00");
-      return {
-        minutes: x.minutes,
-        label: date.toLocaleDateString("fr-FR", { month: "short" }).replace(".", ""),
-        title: `${date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })} : ${fmtReadingTime(x.minutes)} (${x.count} ch.)`,
-      };
-    }),
-  );
-  const weekdayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
-  const weekdays = renderColumns(
-    d.weekdays.map((x, i) => ({
-      minutes: x.minutes,
-      label: weekdayNames[i][0],
-      title: `${weekdayNames[i]} : ${fmtReadingTime(x.minutes)} (${x.count} ch.)`,
-    })),
-  );
-  const hours = renderColumns(
-    d.hours.map((x) => ({
-      minutes: x.minutes,
-      label: `${x.hour} h`,
-      title: `${x.hour} h : ${fmtReadingTime(x.minutes)} (${x.count} ch.)`,
-    })),
-    6,
-  );
-
-  const donutItems = d.top_series.slice(0, 6).map((s) => ({ label: s.title, minutes: s.minutes }));
-  const rest = d.others_minutes + d.top_series.slice(6).reduce((sum, s) => sum + s.minutes, 0);
-  if (rest > 0) donutItems.push({ label: "Autres", minutes: rest });
-
-  const section = (title, body) => `<section class="settings-section"><h2>${title}</h2>${body}</section>`;
+  const since = d.since
+    ? `, calculée depuis ${new Date(d.since + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}`
+    : "";
   return `
-    <p class="section-label">Estimation : ${d.minutes_per_chapter} min par chapitre lu. Seuls les chapitres de ton historique comptent${d.first_read_date ? `, depuis le ${fmtShortDate(d.first_read_date)}` : ""}.</p>
-    <div class="stats-details rv-tiles">${tiles}</div>
-    ${section("Temps de lecture · 30 derniers jours", days)}
-    ${section("Répartition du temps par manhwa", renderDonut(donutItems, d.total_minutes))}
-    ${section("Manhwas les plus lus", renderHBars(d.top_series.map((s) => ({ label: s.title, minutes: s.minutes, count: s.count }))))}
-    ${d.top_genres.length ? section("Genres les plus lus", renderHBars(d.top_genres.map((g) => ({ label: g.name, minutes: g.minutes, count: g.count })))) : ""}
-    ${section("12 derniers mois", months)}
-    ${section("Par jour de la semaine", weekdays)}
-    ${section("Par heure de la journée", hours)}
+    <div class="rv-hero">
+      <div class="rv-total">${fmtBigTime(d.total_minutes)}</div>
+      <div class="rv-caption">${READING_PERIOD_LABELS[d.period]} · ${plural(d.chapters, "chapitre", "chapitres")} · ${plural(d.series_count, "série", "séries")}</div>
+    </div>
+    <div class="rv-periods">${chips}</div>
+    ${list}
+    <p class="rv-foot">Estimation de ${d.minutes_per_chapter} min par chapitre lu${since}.</p>
   `;
 }
 
 async function loadReadingOverview() {
   const box = document.getElementById("reading-content");
-  box.innerHTML = '<p class="section-label">Chargement…</p>';
   try {
     const tzOffset = -new Date().getTimezoneOffset();
-    const res = await fetch(`/api/stats/reading?tz_offset=${tzOffset}`);
+    const res = await fetch(`/api/stats/reading?period=${readingPeriod}&tz_offset=${tzOffset}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     box.innerHTML = renderReadingOverview(await res.json());
+    box.querySelectorAll("[data-period]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        readingPeriod = btn.dataset.period;
+        loadReadingOverview();
+      }),
+    );
   } catch (e) {
     box.innerHTML = '<p class="error">Impossible de charger les statistiques.</p>';
   }

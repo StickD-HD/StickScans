@@ -488,9 +488,9 @@ READING_MINUTES_PER_CHAPTER = max(1, int(os.environ.get("READING_MINUTES_PER_CHA
 
 
 @app.get("/api/stats/reading")
-def reading_overview_stats(tz_offset: int = 0):
-    return database.get_reading_overview(
-        tz_offset_minutes=tz_offset, minutes_per_chapter=READING_MINUTES_PER_CHAPTER
+def reading_overview_stats(period: str = "week", tz_offset: int = 0):
+    return database.get_reading_summary(
+        period=period, tz_offset_minutes=tz_offset, minutes_per_chapter=READING_MINUTES_PER_CHAPTER
     )
 
 
