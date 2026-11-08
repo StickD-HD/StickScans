@@ -41,19 +41,28 @@
       <h1>📚 Stickscans</h1>
       <div class="header-actions">
         <span id="refresh-status-text"></span>
-        <button id="refresh-all-btn" title="Vérifier toutes les séries maintenant">↻</button>
-        <button id="add-btn">+ Ajouter</button>
+        <button id="search-toggle-btn" class="icon-btn" type="button" title="Rechercher" aria-label="Rechercher">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </button>
+        <button id="filter-toggle-btn" class="icon-btn" type="button" title="Filtres et tri" aria-label="Filtres et tri">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+          <span id="filter-badge" class="icon-badge hidden"></span>
+        </button>
+        <div class="menu-wrap">
+          <button id="home-menu-btn" class="icon-btn" type="button" title="Réglages de la bibliothèque" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          </button>
+          <div id="home-menu" class="popover hidden" role="menu">
+            <button id="add-btn" type="button" role="menuitem">＋ Ajouter une série</button>
+            <button id="refresh-all-btn" type="button" role="menuitem"><span id="refresh-all-label">↻ Actualiser toutes les séries</span></button>
+            <button id="manage-categories-btn" type="button" role="menuitem">🏷 Gérer les catégories</button>
+          </div>
+        </div>
       </div>
     </header>
 
     <div id="category-bar">
       <div id="category-tabs"></div>
-      <button id="manage-categories-btn" title="Gérer les catégories">⚙</button>
-    </div>
-
-    <div id="toolbar">
-      <button id="search-toggle-btn" title="Rechercher">🔍 Rechercher</button>
-      <button id="filter-toggle-btn" title="Filtres et tri">⚙ Filtres &amp; tri</button>
     </div>
 
     <div id="search-bar" class="hidden">

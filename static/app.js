@@ -87,6 +87,10 @@ const filterModal = document.getElementById("filter-modal");
 const filterModalClose = document.getElementById("filter-modal-close");
 const categoryTabs = document.getElementById("category-tabs");
 const manageCategoriesBtn = document.getElementById("manage-categories-btn");
+const homeMenuBtn = document.getElementById("home-menu-btn");
+const homeMenu = document.getElementById("home-menu");
+const filterBadge = document.getElementById("filter-badge");
+const refreshAllLabel = document.getElementById("refresh-all-label");
 
 const categoryModal = document.getElementById("category-modal");
 const categoryManageList = document.getElementById("category-manage-list");
@@ -142,6 +146,7 @@ const categoryCheckboxes = document.getElementById("category-checkboxes");
 const editForm = document.getElementById("edit-form");
 const editTitleInput = document.getElementById("edit-title-input");
 const editCoverInput = document.getElementById("edit-cover-input");
+let editInitialCover = "";
 const editSaveBtn = document.getElementById("edit-save-btn");
 const editCancelBtn = document.getElementById("edit-cancel-btn");
 
@@ -769,6 +774,25 @@ anilistCopyRedirect.addEventListener("click", async () => {
   setTimeout(() => { anilistCopyRedirect.textContent = "Copier"; }, 1600);
 });
 
+// Menu de l'accueil (ajout, actualisation, catégories) : se ferme dès qu'on choisit une entrée ou qu'on touche ailleurs.
+function closeHomeMenu() {
+  homeMenu.classList.add("hidden");
+  homeMenuBtn.setAttribute("aria-expanded", "false");
+}
+homeMenuBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const opening = homeMenu.classList.contains("hidden");
+  homeMenu.classList.toggle("hidden", !opening);
+  homeMenuBtn.setAttribute("aria-expanded", String(opening));
+});
+homeMenu.addEventListener("click", closeHomeMenu);
+document.addEventListener("click", (e) => {
+  if (!homeMenu.contains(e.target)) closeHomeMenu();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeHomeMenu();
+});
+
 manageCategoriesBtn.addEventListener("click", () => {
   openModal(categoryModal);
   loadCategoryManageList();
@@ -822,6 +846,21 @@ async function loadStatuses() {
   statusSelect.value = current;
 }
 
+// Loupe allumée si une recherche est en cours ; bouton de filtres allumé, avec le nombre de réglages actifs
+// (genre, statut, séries lues masquées, tri différent du tri par défaut).
+function updateToolbarIndicators() {
+  const active = [
+    sortSelect.value && sortSelect.value !== "last_checked_at",
+    genreSelect.value,
+    statusSelect.value,
+    hideReadCheckbox.checked,
+  ].filter(Boolean).length;
+  filterToggleBtn.classList.toggle("active", active > 0);
+  filterBadge.textContent = String(active);
+  filterBadge.classList.toggle("hidden", active === 0);
+  searchToggleBtn.classList.toggle("active", searchInput.value.trim() !== "");
+}
+
 function saveFilters() {
   const state = {
     sort: sortSelect.value,
@@ -843,6 +882,7 @@ function getSavedFilters() {
 }
 
 async function loadLibrary() {
+  updateToolbarIndicators();
   saveFilters();
   const params = new URLSearchParams({
     sort: sortSelect.value,
@@ -949,7 +989,9 @@ async function loadSeriesDetail() {
   });
 
   editTitleInput.value = s.title || "";
-  editCoverInput.value = s.cover_url || "";
+  // On présente la couverture du site (pas celle d'AniList affichée) : seule une vraie modification la fige.
+  editCoverInput.value = (s.own_cover_url !== undefined ? s.own_cover_url : s.cover_url) || "";
+  editInitialCover = editCoverInput.value;
 }
 
 async function loadSeriesCategories() {
@@ -1340,7 +1382,11 @@ editSaveBtn.addEventListener("click", async () => {
   await fetch(`/api/series/${currentSeriesId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: editTitleInput.value, cover_url: editCoverInput.value }),
+    body: JSON.stringify(
+      editCoverInput.value !== editInitialCover
+        ? { title: editTitleInput.value, cover_url: editCoverInput.value }
+        : { title: editTitleInput.value },
+    ),
   });
   editForm.classList.add("hidden");
   loadSeriesDetail();
@@ -1358,12 +1404,12 @@ async function pollRefreshStatus() {
 
   if (status.is_running) {
     const pct = status.total > 0 ? Math.round((status.completed / status.total) * 100) : 0;
-    refreshAllBtn.textContent = `${pct}%`;
+    refreshAllLabel.textContent = `Actualisation… ${pct} %`;
     refreshStatusText.textContent = status.total > 0 ? `${status.completed}/${status.total}` : "";
     setTimeout(pollRefreshStatus, 1000);
   } else {
     refreshAllBtn.disabled = false;
-    refreshAllBtn.textContent = "↻";
+    refreshAllLabel.textContent = "↻ Actualiser toutes les séries";
     refreshStatusText.textContent = "";
     loadLibrary();
   }
@@ -1626,7 +1672,10 @@ async function init() {
 
   const saved = getSavedFilters();
   if (saved.sort) sortSelect.value = saved.sort;
-  if (saved.search) searchInput.value = saved.search;
+  if (saved.search) {
+    searchInput.value = saved.search;
+    searchBar.classList.remove("hidden");
+  }
   if (saved.hideRead) hideReadCheckbox.checked = saved.hideRead;
   if (saved.categoryId) activeCategoryId = saved.categoryId;
 

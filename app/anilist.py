@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import requests
 
 from . import database
+from .parse_series import safe_image_url
 
 logger = logging.getLogger("manhwa-tracker.anilist")
 
@@ -56,6 +57,7 @@ query {
 ENTRY_QUERY = """
 query ($id: Int, $scoreFormat: ScoreFormat) {
   Media(id: $id) {
+    coverImage { large }
     mediaListEntry {
       status
       progress
@@ -276,6 +278,7 @@ def fetch_entry(media_id: int) -> dict:
         "score": entry.get("score"),
         "start_date": _from_fuzzy_date(entry.get("startedAt")),
         "end_date": _from_fuzzy_date(entry.get("completedAt")),
+        "cover_url": safe_image_url((media.get("coverImage") or {}).get("large")),
     }
 
 
@@ -375,6 +378,7 @@ query ($userName: String, $scoreFormat: ScoreFormat, $chunk: Int) {
     lists {
       entries {
         mediaId
+        media { coverImage { large } }
         status
         progress
         score(format: $scoreFormat)
@@ -425,6 +429,7 @@ def _fetch_collection(user_name: str) -> dict[int, dict]:
                     "score": e.get("score"),
                     "start_date": _from_fuzzy_date(e.get("startedAt")),
                     "end_date": _from_fuzzy_date(e.get("completedAt")),
+                    "cover_url": safe_image_url(((e.get("media") or {}).get("coverImage") or {}).get("large")),
                 }
         if not collection.get("hasNextChunk"):
             break
@@ -454,13 +459,16 @@ def sync_all(force: bool = False) -> dict:
             entries = _fetch_collection(user_name)
             for s in linked:
                 entry = entries.get(s["anilist_id"], {})  # absent de la liste AniList : champs vidés
+                # Série absente de la liste : on garde la couverture déjà connue plutôt que de l'effacer.
+                cover = entry.get("cover_url") if entry else s.get("anilist_cover_url")
                 new = (entry.get("status"), entry.get("progress"), entry.get("score"),
-                       entry.get("start_date"), entry.get("end_date"))
+                       entry.get("start_date"), entry.get("end_date"), cover)
                 old = (s.get("anilist_status"), s.get("anilist_progress"), s.get("anilist_score"),
-                       s.get("anilist_start_date"), s.get("anilist_end_date"))
+                       s.get("anilist_start_date"), s.get("anilist_end_date"), s.get("anilist_cover_url"))
                 if new != old:
                     database.set_series_anilist_data(
-                        s["id"], status=new[0], progress=new[1], score=new[2], start_date=new[3], end_date=new[4]
+                        s["id"], status=new[0], progress=new[1], score=new[2], start_date=new[3], end_date=new[4],
+                        cover_url=new[5],
                     )
                     updated += 1
                 elif s.get("anilist_last_error"):

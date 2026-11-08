@@ -131,9 +131,32 @@ header {
 header h1 { font-size: 1.2rem; margin: 0; }
 
 .header-actions { display: flex; align-items: center; gap: 8px; }
-.header-actions button { background: var(--surface-high); font-size: 1rem; padding: 8px 12px; }
-#add-btn { background: var(--accent); color: #06101F; }
 #refresh-status-text { font-size: 0.7rem; color: var(--muted); }
+#refresh-status-text:empty { display: none; }
+
+/* Boutons-icônes de l'en-tête (recherche, filtres, menu) */
+.icon-btn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; padding: 0; background: var(--surface-high); color: var(--text);
+}
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.icon-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px;
+  display: flex; align-items: center; justify-content: center; border-radius: var(--radius-pill);
+  background: var(--accent); color: #06101F; font-size: 0.65rem; font-weight: 800; line-height: 1;
+}
+.menu-wrap { position: relative; }
+.popover {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; min-width: 250px; padding: 6px;
+  display: flex; flex-direction: column; background: var(--surface-high); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.popover button {
+  width: 100%; padding: 12px 14px; background: transparent; border-radius: var(--radius-sm);
+  font-size: 0.88rem; text-align: left;
+}
+.popover button:hover, .popover button:active { background: var(--accent-soft); }
 
 /* --- Popup d'ajout --- */
 .error { color: var(--error); font-size: 0.8rem; margin: 0; }
@@ -173,14 +196,7 @@ header h1 { font-size: 1.2rem; margin: 0; }
   white-space: nowrap; font-size: 0.78rem; padding: 8px 14px;
 }
 #category-tabs .tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-#manage-categories-btn { background: var(--surface); flex-shrink: 0; }
 
-/* --- Barre d'outils : recherche + filtres réduits à des boutons --- */
-#toolbar {
-  display: flex; gap: 8px; align-items: center;
-  padding: 0 18px 12px;
-}
-#toolbar button { background: var(--surface); border: 1px solid var(--border); font-size: 0.78rem; }
 #search-bar { padding: 0 18px 14px; }
 #search-bar input {
   width: 100%; background: var(--surface); border-radius: var(--radius-pill); font-size: 0.85rem;

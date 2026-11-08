@@ -115,6 +115,7 @@ NEW_SERIES_COLUMNS = {
     "anilist_score": "REAL",
     "anilist_start_date": "TEXT",
     "anilist_end_date": "TEXT",
+    "anilist_cover_url": "TEXT",
 }
 
 NEW_CHAPTERS_COLUMNS = {
@@ -382,6 +383,15 @@ def remove_series_from_category(series_id: int, category_id: int):
 
 # --- Séries ---
 
+def _apply_display_cover(series: dict) -> dict:
+    """Couverture affichée : celle d'AniList quand la série y est liée, sauf si tu en as choisi une à la main.
+    La couverture du site reste disponible dans own_cover_url (formulaire d'édition)."""
+    series["own_cover_url"] = series.get("cover_url")
+    if series.get("anilist_cover_url") and not series.get("cover_locked"):
+        series["cover_url"] = series["anilist_cover_url"]
+    return series
+
+
 def get_all_series(sort: str = "last_checked_at", hide_fully_read: bool = False,
                     genre: str | None = None, status: str | None = None,
                     search: str | None = None, category_id: int | None = None) -> list[dict]:
@@ -429,7 +439,7 @@ def get_all_series(sort: str = "last_checked_at", hide_fully_read: bool = False,
     """
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
-        return [dict(r) for r in rows]
+        return [_apply_display_cover(dict(r)) for r in rows]
 
 
 def get_series_by_id(series_id: int) -> dict | None:
@@ -448,7 +458,7 @@ def get_series_by_id(series_id: int) -> dict | None:
         ).fetchone()
         if not row:
             return None
-        result = dict(row)
+        result = _apply_display_cover(dict(row))
     result["genres"] = get_genres_for_series(series_id)
     result["categories"] = get_categories_for_series(series_id)
     return result
@@ -704,7 +714,7 @@ def get_recent_updates(limit: int = 100) -> list[dict]:
         rows = conn.execute(
             """
             SELECT c.id AS chapter_id, c.number, c.url, c.discovered_at,
-                   s.id AS series_id, s.title AS series_title, s.cover_url AS series_cover
+                   s.id AS series_id, s.title AS series_title, CASE WHEN s.cover_locked = 0 AND s.anilist_cover_url IS NOT NULL THEN s.anilist_cover_url ELSE s.cover_url END AS series_cover
             FROM chapters c
             JOIN series s ON s.id = c.series_id
             WHERE c.is_initial_fetch = 0
@@ -721,7 +731,7 @@ def get_reading_history(limit: int = 200) -> list[dict]:
         rows = conn.execute(
             """
             SELECT c.id AS chapter_id, c.number, c.number_float, c.url, c.read_at,
-                   s.id AS series_id, s.title AS series_title, s.cover_url AS series_cover
+                   s.id AS series_id, s.title AS series_title, CASE WHEN s.cover_locked = 0 AND s.anilist_cover_url IS NOT NULL THEN s.anilist_cover_url ELSE s.cover_url END AS series_cover
             FROM chapters c
             JOIN series s ON s.id = c.series_id
             WHERE c.read_at IS NOT NULL
@@ -817,7 +827,7 @@ def get_reading_summary(period: str = "week", tz_offset_minutes: int = 0, minute
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT s.id, s.title, s.url, s.cover_url, COUNT(*) AS n
+            SELECT s.id, s.title, s.url, CASE WHEN s.cover_locked = 0 AND s.anilist_cover_url IS NOT NULL THEN s.anilist_cover_url ELSE s.cover_url END AS cover_url, COUNT(*) AS n
             FROM chapters c JOIN series s ON s.id = c.series_id
             WHERE c.read_at IS NOT NULL AND date(c.read_at, ?) >= ?
             GROUP BY s.id
@@ -876,15 +886,19 @@ def set_series_anilist_link(series_id: int, anilist_id: int | None, title: str |
             UPDATE series
             SET anilist_id = ?, anilist_title = ?, anilist_last_error = NULL,
                 anilist_status = NULL, anilist_progress = NULL, anilist_score = NULL,
-                anilist_start_date = NULL, anilist_end_date = NULL
+                anilist_start_date = NULL, anilist_end_date = NULL, anilist_cover_url = NULL
             WHERE id = ?
             """,
             (anilist_id, title, series_id),
         )
 
 
+_UNSET = object()
+
+
 def set_series_anilist_data(series_id: int, status=None, progress=None, score=None,
-                             start_date=None, end_date=None):
+                             start_date=None, end_date=None, cover_url=_UNSET):
+    """cover_url : couverture AniList. Si l'argument est absent, celle déjà enregistrée est conservée."""
     with get_conn() as conn:
         conn.execute(
             """
@@ -895,6 +909,8 @@ def set_series_anilist_data(series_id: int, status=None, progress=None, score=No
             """,
             (status, progress, score, start_date, end_date, series_id),
         )
+        if cover_url is not _UNSET:
+            conn.execute("UPDATE series SET anilist_cover_url = ? WHERE id = ?", (cover_url, series_id))
 
 
 def set_series_anilist_error(series_id: int, error: str | None):
