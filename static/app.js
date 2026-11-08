@@ -85,7 +85,7 @@ const searchBar = document.getElementById("search-bar");
 const filterToggleBtn = document.getElementById("filter-toggle-btn");
 const filterModal = document.getElementById("filter-modal");
 const filterModalClose = document.getElementById("filter-modal-close");
-const categoryTabs = document.getElementById("category-tabs");
+const categorySelect = document.getElementById("category-select");
 const manageCategoriesBtn = document.getElementById("manage-categories-btn");
 const homeMenuBtn = document.getElementById("home-menu-btn");
 const homeMenu = document.getElementById("home-menu");
@@ -627,22 +627,22 @@ document.getElementById("clear-history-btn").addEventListener("click", async () 
   loadHistory();
 });
 
-async function loadCategoryTabs() {
+// Liste des catégories dans la fenêtre des filtres. Si la catégorie active n'existe plus (supprimée), on la retire.
+async function loadCategorySelect() {
   const res = await fetch("/api/categories");
   const categories = await res.json();
-  categoryTabs.innerHTML = "";
-  const allBtn = document.createElement("button");
-  allBtn.textContent = "Tous";
-  allBtn.className = "tab" + (activeCategoryId === "" ? " active" : "");
-  allBtn.addEventListener("click", () => { activeCategoryId = ""; loadCategoryTabs(); loadLibrary(); });
-  categoryTabs.appendChild(allBtn);
-  for (const c of categories) {
-    const btn = document.createElement("button");
-    btn.textContent = c.name;
-    btn.className = "tab" + (activeCategoryId === c.id ? " active" : "");
-    btn.addEventListener("click", () => { activeCategoryId = c.id; loadCategoryTabs(); loadLibrary(); });
-    categoryTabs.appendChild(btn);
+  if (activeCategoryId !== "" && !categories.some((c) => String(c.id) === String(activeCategoryId))) {
+    activeCategoryId = "";
   }
+  categorySelect.innerHTML = '<option value="">Toutes les catégories</option>';
+  for (const c of categories) {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name;
+    categorySelect.appendChild(opt);
+  }
+  categorySelect.value = String(activeCategoryId);
+  updateToolbarIndicators();
 }
 
 async function loadCategoryManageList() {
@@ -667,7 +667,7 @@ async function loadCategoryManageList() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: input.value.trim() }),
       });
-      loadCategoryTabs();
+      loadCategorySelect();
       if (currentSeriesId) loadSeriesCategories();
     });
   });
@@ -676,7 +676,7 @@ async function loadCategoryManageList() {
       if (!confirm("Supprimer cette catégorie ?")) return;
       await fetch(`/api/categories/${btn.dataset.id}`, { method: "DELETE" });
       loadCategoryManageList();
-      loadCategoryTabs();
+      await loadCategorySelect();
       loadLibrary();
     });
   });
@@ -815,7 +815,7 @@ newCategoryBtn.addEventListener("click", async () => {
   });
   newCategoryInput.value = "";
   loadCategoryManageList();
-  loadCategoryTabs();
+  loadCategorySelect();
 });
 
 async function loadGenreSelect() {
@@ -847,9 +847,10 @@ async function loadStatuses() {
 }
 
 // Loupe allumée si une recherche est en cours ; bouton de filtres allumé, avec le nombre de réglages actifs
-// (genre, statut, séries lues masquées, tri différent du tri par défaut).
+// (catégorie, genre, statut, séries lues masquées, tri différent du tri par défaut).
 function updateToolbarIndicators() {
   const active = [
+    activeCategoryId !== "",
     sortSelect.value && sortSelect.value !== "last_checked_at",
     genreSelect.value,
     statusSelect.value,
@@ -1419,6 +1420,10 @@ fetch("/api/refresh-status").then((r) => r.json()).then((status) => {
   if (status.is_running) pollRefreshStatus();
 });
 
+categorySelect.addEventListener("change", () => {
+  activeCategoryId = categorySelect.value;
+  loadLibrary();
+});
 sortSelect.addEventListener("change", loadLibrary);
 statusSelect.addEventListener("change", loadLibrary);
 genreSelect.addEventListener("change", loadLibrary);
@@ -1597,7 +1602,7 @@ async function runAdd(urls) {
 
   loadGenreSelect();
   loadStatuses();
-  loadCategoryTabs();
+  loadCategorySelect();
   loadLibrary();
 }
 
@@ -1684,7 +1689,7 @@ async function init() {
   if (saved.genre) genreSelect.value = saved.genre;
   if (saved.status) statusSelect.value = saved.status;
 
-  await loadCategoryTabs();
+  await loadCategorySelect();
   await loadLibrary();
 
   if ("serviceWorker" in navigator) {

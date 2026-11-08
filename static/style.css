@@ -187,15 +187,6 @@ header h1 { font-size: 1.2rem; margin: 0; }
 .add-row.fail small { color: var(--error); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* --- Catégories --- */
-#category-bar { display: flex; align-items: center; gap: 8px; padding: 0 18px 12px; overflow-x: auto; }
-#category-tabs { display: flex; gap: 8px; flex: 1; overflow-x: auto; scrollbar-width: none; }
-#category-tabs::-webkit-scrollbar { display: none; }
-#category-tabs .tab {
-  background: var(--surface); border: 1px solid var(--border); color: var(--muted);
-  white-space: nowrap; font-size: 0.78rem; padding: 8px 14px;
-}
-#category-tabs .tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
 #search-bar { padding: 0 18px 14px; }
 #search-bar input {

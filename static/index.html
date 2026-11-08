@@ -61,10 +61,6 @@
       </div>
     </header>
 
-    <div id="category-bar">
-      <div id="category-tabs"></div>
-    </div>
-
     <div id="search-bar" class="hidden">
       <input id="search-input" type="search" placeholder="Rechercher dans ma bibliothèque...">
     </div>
@@ -183,6 +179,9 @@
   <div id="filter-modal" class="hidden">
     <div id="filter-modal-content">
       <h2>Filtres &amp; tri</h2>
+      <label>Catégorie
+        <select id="category-select"><option value="">Toutes les catégories</option></select>
+      </label>
       <label>Trier par
         <select id="sort-select">
           <option value="last_checked_at">Derniers chapitres récupérés</option>
