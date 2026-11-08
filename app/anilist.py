@@ -282,16 +282,29 @@ def fetch_entry(media_id: int) -> dict:
     }
 
 
+def _status_when_reading(current_status: str | None) -> str | None:
+    """Statut à envoyer quand une lecture est enregistrée : « En cours » si la série n'a aucun statut ou est
+    seulement « À lire » ; sinon on ne touche pas au statut (En pause, Abandonné, Terminé, Relecture...)."""
+    return "CURRENT" if current_status in (None, "PLANNING") else None
+
+
 def link_series(series_id: int, media_id: int, title: str):
     database.set_series_anilist_link(series_id, media_id, title)
     try:
         entry = fetch_entry(media_id)
         database.set_series_anilist_data(series_id, **entry)
-        # Chapitres déjà lus dans l'appli : on les envoie tout de suite, mais seulement s'ils
-        # sont en avance sur AniList (on ne fait jamais reculer une progression existante).
         local_progress = database.get_max_read_chapter_number(series_id)
-        if local_progress and _token() and local_progress > (entry.get("progress") or 0):
-            push_update(series_id, status=None if entry.get("status") else "CURRENT", progress=local_progress)
+        if not _token():
+            return
+        if local_progress:
+            # Chapitres déjà lus dans l'appli : on les envoie tout de suite, mais seulement s'ils
+            # sont en avance sur AniList (on ne fait jamais reculer une progression existante).
+            if local_progress > (entry.get("progress") or 0):
+                push_update(series_id, status=_status_when_reading(entry.get("status")), progress=local_progress)
+        elif not entry.get("status"):
+            # Aucun chapitre lu ici et série absente de ta liste AniList : elle y entre en « À lire ».
+            # Une série déjà présente (quel que soit son statut) n'est jamais modifiée.
+            push_update(series_id, status="PLANNING")
     except Exception as e:
         database.set_series_anilist_error(series_id, str(e))
         logger.error("Échec de récupération de la fiche AniList pour %s : %s", title, e)
@@ -349,8 +362,8 @@ def push_update(series_id: int, status=None, progress=None, score=None, start_da
 def push_progress(series_id: int):
     """Appelé automatiquement à chaque chapitre marqué lu : pousse la progression vers AniList, mais seulement
     si elle dépasse celle qu'AniList a RÉELLEMENT en ce moment (relue à chaque fois). Ainsi, lire ailleurs puis
-    cocher un vieux chapitre ici ne fait jamais reculer AniList. Le statut passe à CURRENT seulement si aucun
-    statut n'existe encore."""
+    cocher un vieux chapitre ici ne fait jamais reculer AniList. Le statut passe à « En cours » seulement si la
+    série n'en avait aucun ou était en « À lire »."""
     series = database.get_series_by_id(series_id)
     if not series or not series.get("anilist_id") or not _token():
         return
@@ -366,7 +379,7 @@ def push_progress(series_id: int):
     database.set_series_anilist_data(series_id, **remote)  # l'appli reflète l'état réel d'AniList
     if progress <= (remote.get("progress") or 0):
         return
-    push_update(series_id, status=None if remote.get("status") else "CURRENT", progress=progress)
+    push_update(series_id, status=_status_when_reading(remote.get("status")), progress=progress)
 
 
 # --- Synchro AniList -> StickScans (aucune écriture sur AniList) ---
