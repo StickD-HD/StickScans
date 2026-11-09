@@ -131,8 +131,8 @@ header {
 header h1 { font-size: 1.2rem; margin: 0; }
 
 .header-actions { display: flex; align-items: center; gap: 8px; }
-#refresh-status-text { font-size: 0.7rem; color: var(--muted); }
-#refresh-status-text:empty { display: none; }
+#refresh-status-text, #updates-refresh-status { font-size: 0.7rem; color: var(--muted); }
+#refresh-status-text:empty, #updates-refresh-status:empty { display: none; }
 
 /* Boutons-icônes de l'en-tête (recherche, filtres, menu) */
 .icon-btn {
@@ -299,29 +299,18 @@ main#library { padding: 0 18px; }
 #detail-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 #detail-info h1 { font-size: 1.15rem; margin: 0 0 2px; }
 
-#detail-alt-names-wrap { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-#detail-alt-names {
-  font-size: 0.72rem; color: var(--muted); font-style: italic;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-}
-#detail-alt-names-wrap.expanded { flex-wrap: wrap; }
-#detail-alt-names-wrap.expanded #detail-alt-names { white-space: normal; overflow: visible; text-overflow: clip; }
-#alt-names-toggle {
-  flex-shrink: 0; background: none; border: none; padding: 0;
-  font-size: 0.7rem; color: var(--accent); font-weight: 700;
-}
-
 #detail-meta, #detail-author, #detail-editor, #detail-team { font-size: 0.78rem; color: var(--muted); }
 
 /* --- Rangée d'actions : AniList / Catégorie / Source --- */
 #detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
 #detail-actions button, #detail-actions .action-btn-link {
-  flex: 1; text-align: center; background: var(--surface); border: 1px solid var(--border);
+  flex: 1 1 auto; text-align: center; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-pill); font-weight: 600;
-  font-size: 0.74rem; padding: 10px 6px; color: var(--text); text-decoration: none;
+  font-size: 0.74rem; padding: 10px 12px; color: var(--text); text-decoration: none;
   display: flex; align-items: center; justify-content: center; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
+#detail-actions #category-action-btn { order: 1; }  /* en dernier : si la place manque, c'est lui qui passe à la ligne */
 #anilist-action-btn.linked { background: var(--accent2-soft); color: var(--accent2); border-color: var(--accent2); flex: 1 1 100%; }
 
 #detail-synopsis-wrap { position: relative; margin: 16px 0 10px; }

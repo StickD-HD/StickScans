@@ -72,7 +72,15 @@
   </div>
 
   <div id="updates-view" class="hidden">
-    <header><h1>Mises à jour</h1></header>
+    <header>
+      <h1>Mises à jour</h1>
+      <div class="header-actions">
+        <span id="updates-refresh-status"></span>
+        <button id="updates-refresh-btn" class="icon-btn" type="button" title="Vérifier les nouveaux chapitres" aria-label="Actualiser">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+        </button>
+      </div>
+    </header>
     <main id="updates-list"></main>
   </div>
 
@@ -240,10 +248,6 @@
         <img id="detail-cover" alt="">
         <div id="detail-info">
           <h1 id="detail-title"></h1>
-          <div id="detail-alt-names-wrap">
-            <span id="detail-alt-names"></span>
-            <button id="alt-names-toggle" class="hidden">voir plus</button>
-          </div>
           <div id="detail-meta"></div>
           <div id="detail-author"></div>
           <div id="detail-editor"></div>
@@ -254,6 +258,7 @@
       <div id="detail-actions">
         <button id="anilist-action-btn">🔗 AniList</button>
         <button id="category-action-btn" type="button">✓ Dans la bibliothèque</button>
+        <a id="detail-source-btn" class="action-btn-link" target="_blank" rel="noopener">🌐 Scan-Manga</a>
       </div>
 
       <div id="anilist-align-banner" class="hidden">

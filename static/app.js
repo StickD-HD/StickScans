@@ -110,9 +110,9 @@ const continueReadingBtn = document.getElementById("continue-reading-btn");
 
 const detailCover = document.getElementById("detail-cover");
 const detailTitle = document.getElementById("detail-title");
-const detailAltNamesWrap = document.getElementById("detail-alt-names-wrap");
-const detailAltNames = document.getElementById("detail-alt-names");
-const altNamesToggle = document.getElementById("alt-names-toggle");
+const detailSourceBtn = document.getElementById("detail-source-btn");
+const updatesRefreshBtn = document.getElementById("updates-refresh-btn");
+const updatesRefreshStatus = document.getElementById("updates-refresh-status");
 const detailMeta = document.getElementById("detail-meta");
 const detailGenres = document.getElementById("detail-genres");
 const detailAuthor = document.getElementById("detail-author");
@@ -951,16 +951,6 @@ async function loadSeriesDetail() {
   detailCover.src = s.cover_url || "";
   detailTitle.textContent = s.title || "Sans titre";
 
-  detailAltNames.textContent = s.alt_names ? "Aussi connu sous : " + s.alt_names : "";
-  detailAltNamesWrap.classList.remove("expanded");
-  altNamesToggle.classList.add("hidden");
-  altNamesToggle.textContent = "voir plus";
-  requestAnimationFrame(() => {
-    if (detailAltNames.scrollWidth > detailAltNames.clientWidth) {
-      altNamesToggle.classList.remove("hidden");
-    }
-  });
-
   const statusPill = s.status ? `<span class="status-pill ${statusClass(s.status)}">${escapeHtml(s.status)}</span>` : "";
   detailMeta.innerHTML = statusPill + escapeHtml([s.category, s.year].filter(Boolean).join(" · "));
 
@@ -976,6 +966,7 @@ async function loadSeriesDetail() {
   detailEditor.textContent = s.editor ? "Éditeur : " + s.editor : "";
   detailTeam.textContent = s.team ? "Team trad : " + s.team : "";
   detailSourceLink.href = s.url;
+  detailSourceBtn.href = s.url;
   renderAnilistSection(s);
 
   detailSynopsis.textContent = s.synopsis || "";
@@ -1203,11 +1194,6 @@ function backToLibrary() {
 
 backBtn.addEventListener("click", backToLibrary);
 
-altNamesToggle.addEventListener("click", () => {
-  const expanded = detailAltNamesWrap.classList.toggle("expanded");
-  altNamesToggle.textContent = expanded ? "voir moins" : "voir plus";
-});
-
 synopsisToggle.addEventListener("click", () => {
   const expanded = detailSynopsisWrap.classList.toggle("expanded");
   synopsisToggle.textContent = expanded ? "voir moins" : "voir plus";
@@ -1382,26 +1368,41 @@ anilistUnlinkBtn.addEventListener("click", async () => {
   renderAnilistSection(data);
 });
 
-refreshAllBtn.addEventListener("click", async () => {
+async function startRefreshAll() {
   await fetch("/api/series/refresh-all", { method: "POST" });
   pollRefreshStatus();
-});
+}
+refreshAllBtn.addEventListener("click", startRefreshAll);
+updatesRefreshBtn.addEventListener("click", startRefreshAll);
 
 async function pollRefreshStatus() {
   refreshAllBtn.disabled = true;
-  const res = await fetch("/api/refresh-status");
-  const status = await res.json();
+  updatesRefreshBtn.disabled = true;
+  updatesRefreshBtn.classList.add("busy");
+  let status;
+  try {
+    status = await (await fetch("/api/refresh-status")).json();
+  } catch (e) {
+    status = { is_running: false }; // serveur injoignable : on arrête de suivre, les boutons redeviennent utilisables
+  }
 
   if (status.is_running) {
     const pct = status.total > 0 ? Math.round((status.completed / status.total) * 100) : 0;
+    const counter = status.total > 0 ? `${status.completed}/${status.total}` : "";
     refreshAllLabel.textContent = `Actualisation… ${pct} %`;
-    refreshStatusText.textContent = status.total > 0 ? `${status.completed}/${status.total}` : "";
+    refreshStatusText.textContent = counter;
+    updatesRefreshStatus.textContent = counter;
     setTimeout(pollRefreshStatus, 1000);
   } else {
     refreshAllBtn.disabled = false;
+    updatesRefreshBtn.disabled = false;
+    updatesRefreshBtn.classList.remove("busy");
     refreshAllLabel.textContent = "↻ Actualiser toutes les séries";
     refreshStatusText.textContent = "";
+    updatesRefreshStatus.textContent = "";
     loadLibrary();
+    // La page Mises à jour affichée pendant l'actualisation se met à jour toute seule à la fin.
+    if (!document.getElementById("updates-view").classList.contains("hidden")) loadUpdates();
   }
 }
 
