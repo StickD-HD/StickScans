@@ -220,10 +220,18 @@
   <div id="chapters-view" class="hidden">
     <header>
       <button id="back-btn">← Retour</button>
-      <div class="header-actions-inline">
-        <button id="recheck-series-btn">↻ Actualiser</button>
-        <button id="edit-series-btn" title="Modifier">✏️</button>
-        <button id="remove-series-btn" title="Retirer cette série">🗑</button>
+      <div class="menu-wrap">
+        <button id="detail-menu-btn" class="icon-btn" type="button" title="Options" aria-label="Options" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+        </button>
+        <div id="detail-menu" class="popover hidden" role="menu">
+          <button id="select-mode-btn" type="button" role="menuitem">☑ Sélectionner</button>
+          <button id="category-menu-btn" type="button" role="menuitem">🏷 Modifier la catégorie</button>
+          <button id="recheck-series-btn" type="button" role="menuitem">↻ Actualiser</button>
+          <button id="reset-progress-btn" type="button" role="menuitem">⟲ Réinitialiser la progression</button>
+          <a id="detail-source-link" target="_blank" rel="noopener" role="menuitem">🌐 Ouvrir sur le web</a>
+          <button id="remove-series-btn" class="danger-item" type="button" role="menuitem">🗑 Retirer de la bibliothèque</button>
+        </div>
       </div>
     </header>
 
@@ -245,8 +253,7 @@
 
       <div id="detail-actions">
         <button id="anilist-action-btn">🔗 AniList</button>
-        <button id="category-action-btn">🏷 Catégorie</button>
-        <a id="detail-source-link" class="action-btn-link" target="_blank">🌐 Scan-Manga</a>
+        <button id="category-action-btn" type="button">✓ Dans la bibliothèque</button>
       </div>
 
       <div id="anilist-align-banner" class="hidden">
@@ -284,21 +291,16 @@
       <div id="detail-genres" class="genres-line"></div>
 
       <button id="continue-reading-btn" class="hidden"></button>
-
-      <div id="edit-form" class="hidden">
-        <label>Titre <input id="edit-title-input" type="text"></label>
-        <label>URL de couverture <input id="edit-cover-input" type="url"></label>
-        <button id="edit-save-btn">Enregistrer</button>
-        <button id="edit-cancel-btn">Annuler</button>
-      </div>
     </div>
 
-    <p id="chapters-count" class="section-label"></p>
-    <div id="chapters-toolbar">
-      <button id="select-mode-btn">Sélectionner</button>
-      <button id="select-all-btn" class="hidden">Tout sélectionner</button>
-      <button id="bulk-read-btn" class="hidden">Marquer lu</button>
-      <button id="bulk-unread-btn" class="hidden">Marquer non lu</button>
+    <div id="chapters-head">
+      <h2 id="chapters-count"></h2>
+      <div id="chapters-toolbar" class="hidden">
+        <button id="select-all-btn" type="button">Tout sélectionner</button>
+        <button id="bulk-read-btn" type="button">Marquer lu</button>
+        <button id="bulk-unread-btn" type="button">Marquer non lu</button>
+        <button id="select-cancel-btn" type="button">Annuler</button>
+      </div>
     </div>
     <main>
       <ul id="chapters-list"></ul>

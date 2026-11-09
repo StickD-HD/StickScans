@@ -384,9 +384,8 @@ def remove_series_from_category(series_id: int, category_id: int):
 # --- Séries ---
 
 def _apply_display_cover(series: dict) -> dict:
-    """Couverture affichée : celle d'AniList quand la série y est liée, sauf si tu en as choisi une à la main.
-    La couverture du site reste disponible dans own_cover_url (formulaire d'édition)."""
-    series["own_cover_url"] = series.get("cover_url")
+    """Couverture affichée : celle d'AniList quand la série y est liée, sauf si une couverture a été choisie
+    à la main (cover_locked)."""
     if series.get("anilist_cover_url") and not series.get("cover_locked"):
         series["cover_url"] = series["anilist_cover_url"]
     return series
@@ -523,14 +522,6 @@ def update_series_result(series_id: int, parsed: dict) -> list[dict]:
 
         _upsert_genres(conn, series_id, parsed.get("genres") or [])
         return _upsert_chapters(conn, series_id, parsed.get("chapters") or [], is_initial=False)
-
-
-def update_series_manual(series_id: int, cover_url: str | None, title: str | None):
-    with get_conn() as conn:
-        if cover_url is not None:
-            conn.execute("UPDATE series SET cover_url = ?, cover_locked = 1 WHERE id = ?", (cover_url, series_id))
-        if title is not None:
-            conn.execute("UPDATE series SET title = ?, title_locked = 1 WHERE id = ?", (title, series_id))
 
 
 def unlock_field(series_id: int, field: str):
@@ -705,6 +696,17 @@ def mark_all_read(series_id: int):
     with get_conn() as conn:
         # "Tout marquer comme lu" = rattrapage : pas d'entrées dans l'historique.
         conn.execute("UPDATE chapters SET is_read = 1 WHERE series_id = ?", (series_id,))
+
+
+def mark_all_unread(series_id: int) -> int:
+    """Réinitialise la progression : tous les chapitres redeviennent non lus et quittent l'historique
+    (comme « marquer non lu » sur un chapitre). Renvoie le nombre de chapitres concernés."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE chapters SET is_read = 0, read_at = NULL WHERE series_id = ? AND (is_read = 1 OR read_at IS NOT NULL)",
+            (series_id,),
+        )
+        return cur.rowcount
 
 
 # --- Mises à jour / Historique ---

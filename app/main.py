@@ -122,11 +122,6 @@ class HistoryRemoveRequest(BaseModel):
     chapter_ids: list[int]
 
 
-class UpdateSeriesRequest(BaseModel):
-    cover_url: str | None = None
-    title: str | None = None
-
-
 class CategoryRequest(BaseModel):
     name: str
 
@@ -261,14 +256,6 @@ def get_series(series_id: int):
     if not series:
         raise HTTPException(404, "Série introuvable")
     return series
-
-
-@app.patch("/api/series/{series_id}")
-def update_series(series_id: int, payload: UpdateSeriesRequest):
-    if not database.get_series_by_id(series_id):
-        raise HTTPException(404, "Série introuvable")
-    database.update_series_manual(series_id, cover_url=payload.cover_url, title=payload.title)
-    return database.get_series_by_id(series_id)
 
 
 @app.post("/api/series/{series_id}/unlock/{field}")
@@ -436,6 +423,16 @@ def mark_all_read(series_id: int):
         raise HTTPException(404, "Série introuvable")
     database.mark_all_read(series_id)
     anilist.push_progress(series_id)
+    return database.get_series_by_id(series_id)
+
+
+@app.post("/api/series/{series_id}/reset-progress")
+def reset_progress(series_id: int):
+    """Remet tous les chapitres en « non lu ». AniList n'est pas touché : une progression n'y recule jamais
+    automatiquement."""
+    if not database.get_series_by_id(series_id):
+        raise HTTPException(404, "Série introuvable")
+    database.mark_all_unread(series_id)
     return database.get_series_by_id(series_id)
 
 

@@ -289,8 +289,6 @@ main#library { padding: 0 18px; }
 /* --- Vue chapitres / fiche détaillée --- */
 #chapters-view header { justify-content: space-between; gap: 8px; }
 #chapters-view header button { background: var(--surface-high); }
-.header-actions-inline { display: flex; align-items: center; gap: 8px; }
-#edit-series-btn { padding: 8px 12px; font-size: 1rem; }
 
 #detail-panel { padding: 4px 18px 18px; }
 #detail-top { display: flex; gap: 16px; }
@@ -353,8 +351,6 @@ main#library { padding: 0 18px; }
 .category-check-label { font-size: 0.8rem; display: flex; align-items: center; gap: 6px; }
 .category-check-label input { accent-color: var(--accent); }
 
-#edit-form { margin: 12px 0; display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--border); padding: 14px; border-radius: var(--radius-md); }
-#edit-form label { font-size: 0.8rem; display: flex; flex-direction: column; gap: 5px; color: var(--muted); }
 
 /* --- AniList --- */
 #anilist-linked { margin: 10px 0 0; padding: 14px; background: var(--accent2-soft); border: 1px solid var(--border); border-radius: var(--radius-md); }
@@ -383,8 +379,11 @@ main#library { padding: 0 18px; }
 #anilist-status-text { margin-top: 8px; }
 
 /* --- Barre d'actions chapitres --- */
-#chapters-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 12px; }
-#bulk-read-btn, #bulk-unread-btn { background: var(--surface); }
+#chapters-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 22px 18px 10px; }
+#chapters-count { margin: 0; font-size: 0.95rem; font-weight: 600; letter-spacing: 0; color: var(--muted); }
+#chapters-count strong { margin-right: 5px; font-size: 1.55rem; font-weight: 800; color: var(--text); }
+#chapters-toolbar { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; }
+#chapters-toolbar button { padding: 8px 12px; background: var(--surface-high); font-size: 0.8rem; }
 
 #chapters-list { list-style: none; margin: 0; padding: 0 18px; }
 .chapter-row {
@@ -531,7 +530,6 @@ html, body { overscroll-behavior-x: none; }
 .status-paused { color: var(--st-paused); background: rgba(245, 196, 81, 0.14); }
 .status-dropped { color: var(--st-dropped); background: rgba(240, 100, 92, 0.14); }
 .status-other { color: var(--st-other); background: rgba(124, 137, 172, 0.14); }
-#chapters-count { margin: 10px 14px 4px; }
 
 /* Aperçu de lecture */
 #reading-content { padding: 0 14px 32px; }
@@ -563,3 +561,15 @@ html, body { overscroll-behavior-x: none; }
 .rv-more, .rv-empty, .rv-foot { margin: 14px 2px 0; font-size: 0.78rem; color: var(--muted); }
 .rv-empty { padding: 28px 0; text-align: center; font-size: 0.9rem; }
 .rv-foot { margin-top: 22px; }
+
+/* Menu de la fiche d'une série */
+#chapters-view header .popover button { background: transparent; }
+#chapters-view header .popover button:hover, #chapters-view header .popover button:active { background: var(--accent-soft); }
+.popover a {
+  display: block; padding: 12px 14px; border-radius: var(--radius-sm); color: var(--text);
+  font-size: 0.88rem; font-weight: 600; text-decoration: none;
+}
+.popover a:hover, .popover a:active { background: var(--accent-soft); }
+.popover .danger-item { color: var(--error); }
+.icon-btn.busy { animation: icon-busy 1s ease-in-out infinite; }
+@keyframes icon-busy { 50% { opacity: 0.35; } }

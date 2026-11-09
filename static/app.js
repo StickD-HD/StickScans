@@ -100,7 +100,6 @@ const categoryModalClose = document.getElementById("category-modal-close");
 
 const backBtn = document.getElementById("back-btn");
 const recheckSeriesBtn = document.getElementById("recheck-series-btn");
-const editSeriesBtn = document.getElementById("edit-series-btn");
 const chaptersList = document.getElementById("chapters-list");
 const selectModeBtn = document.getElementById("select-mode-btn");
 const selectAllBtn = document.getElementById("select-all-btn");
@@ -143,12 +142,12 @@ const detailSynopsisWrap = document.getElementById("detail-synopsis-wrap");
 const detailSynopsis = document.getElementById("detail-synopsis");
 const synopsisToggle = document.getElementById("synopsis-toggle");
 const categoryCheckboxes = document.getElementById("category-checkboxes");
-const editForm = document.getElementById("edit-form");
-const editTitleInput = document.getElementById("edit-title-input");
-const editCoverInput = document.getElementById("edit-cover-input");
-let editInitialCover = "";
-const editSaveBtn = document.getElementById("edit-save-btn");
-const editCancelBtn = document.getElementById("edit-cancel-btn");
+const detailMenuBtn = document.getElementById("detail-menu-btn");
+const detailMenu = document.getElementById("detail-menu");
+const categoryMenuBtn = document.getElementById("category-menu-btn");
+const resetProgressBtn = document.getElementById("reset-progress-btn");
+const chaptersToolbar = document.getElementById("chapters-toolbar");
+const selectCancelBtn = document.getElementById("select-cancel-btn");
 
 let currentSeriesId = null;
 let activeCategoryId = "";
@@ -774,24 +773,30 @@ anilistCopyRedirect.addEventListener("click", async () => {
   setTimeout(() => { anilistCopyRedirect.textContent = "Copier"; }, 1600);
 });
 
-// Menu de l'accueil (ajout, actualisation, catégories) : se ferme dès qu'on choisit une entrée ou qu'on touche ailleurs.
-function closeHomeMenu() {
-  homeMenu.classList.add("hidden");
-  homeMenuBtn.setAttribute("aria-expanded", "false");
+// Menus contextuels (accueil et fiche) : se ferment dès qu'on choisit une entrée, qu'on touche ailleurs ou sur Échap.
+function setupPopover(button, menu) {
+  const close = () => {
+    menu.classList.add("hidden");
+    button.setAttribute("aria-expanded", "false");
+  };
+  button.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const opening = menu.classList.contains("hidden");
+    menu.classList.toggle("hidden", !opening);
+    button.setAttribute("aria-expanded", String(opening));
+  });
+  menu.addEventListener("click", close);
+  // Phase de capture : le menu se ferme même si l'élément touché (ligne de chapitre, carte...) arrête la propagation.
+  document.addEventListener("click", (e) => {
+    if (!menu.contains(e.target) && !button.contains(e.target)) close();
+  }, true);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+  return close;
 }
-homeMenuBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const opening = homeMenu.classList.contains("hidden");
-  homeMenu.classList.toggle("hidden", !opening);
-  homeMenuBtn.setAttribute("aria-expanded", String(opening));
-});
-homeMenu.addEventListener("click", closeHomeMenu);
-document.addEventListener("click", (e) => {
-  if (!homeMenu.contains(e.target)) closeHomeMenu();
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeHomeMenu();
-});
+setupPopover(homeMenuBtn, homeMenu);
+setupPopover(detailMenuBtn, detailMenu);
 
 manageCategoriesBtn.addEventListener("click", () => {
   openModal(categoryModal);
@@ -926,13 +931,7 @@ async function openChaptersView(seriesId) {
   currentChapters = [];
   currentAnilistProgress = null;
   anilistAlignBanner.classList.add("hidden");
-  selectionMode = false;
-  selectedChapterIds.clear();
-  selectModeBtn.textContent = "Sélectionner";
-  selectAllBtn.classList.add("hidden");
-  bulkReadBtn.classList.add("hidden");
-  bulkUnreadBtn.classList.add("hidden");
-  editForm.classList.add("hidden");
+  setSelectionMode(false);
   if (chaptersView.classList.contains("hidden")) {
     viewBeforeDetail = lastTopView;
     scrollBeforeDetail = window.scrollY;
@@ -988,11 +987,6 @@ async function loadSeriesDetail() {
       synopsisToggle.classList.remove("hidden");
     }
   });
-
-  editTitleInput.value = s.title || "";
-  // On présente la couverture du site (pas celle d'AniList affichée) : seule une vraie modification la fige.
-  editCoverInput.value = (s.own_cover_url !== undefined ? s.own_cover_url : s.cover_url) || "";
-  editInitialCover = editCoverInput.value;
 }
 
 async function loadSeriesCategories() {
@@ -1006,7 +1000,7 @@ async function loadSeriesCategories() {
 
   categoryCheckboxes.innerHTML = "";
   if (allCategories.length === 0) {
-    categoryCheckboxes.textContent = "Aucune catégorie créée (bouton ⚙ dans la bibliothèque).";
+    categoryCheckboxes.textContent = "Aucune catégorie créée (menu ⚙ de la bibliothèque).";
     return;
   }
   for (const c of allCategories) {
@@ -1042,9 +1036,8 @@ async function loadChapters() {
   updateContinueReadingButton();
   updateAlignBanner();
   const total = currentChapters.length;
-  const readTotal = currentChapters.filter((c) => c.is_read).length;
-  document.getElementById("chapters-count").textContent = total
-    ? `${total} chapitre${total > 1 ? "s" : ""} · ${readTotal} lu${readTotal > 1 ? "s" : ""}`
+  document.getElementById("chapters-count").innerHTML = total
+    ? `<strong>${total}</strong> chapitre${total > 1 ? "s" : ""}`
     : "";
 
   chaptersList.innerHTML = "";
@@ -1126,13 +1119,19 @@ async function markReadUpTo(number) {
   loadChapters();
 }
 
-selectModeBtn.addEventListener("click", () => {
-  selectionMode = !selectionMode;
+function setSelectionMode(on) {
+  selectionMode = on;
   selectedChapterIds.clear();
-  selectModeBtn.textContent = selectionMode ? "Annuler la sélection" : "Sélectionner";
-  selectAllBtn.classList.toggle("hidden", !selectionMode);
-  bulkReadBtn.classList.toggle("hidden", !selectionMode);
-  bulkUnreadBtn.classList.toggle("hidden", !selectionMode);
+  selectModeBtn.textContent = on ? "✕ Annuler la sélection" : "☑ Sélectionner";
+  chaptersToolbar.classList.toggle("hidden", !on);
+}
+
+selectModeBtn.addEventListener("click", () => {
+  setSelectionMode(!selectionMode);
+  loadChapters();
+});
+selectCancelBtn.addEventListener("click", () => {
+  setSelectionMode(false);
   loadChapters();
 });
 
@@ -1152,12 +1151,7 @@ async function bulkSetRead(isRead) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chapter_ids: [...selectedChapterIds], is_read: isRead }),
   });
-  selectedChapterIds.clear();
-  selectionMode = false;
-  selectModeBtn.textContent = "Sélectionner";
-  selectAllBtn.classList.add("hidden");
-  bulkReadBtn.classList.add("hidden");
-  bulkUnreadBtn.classList.add("hidden");
+  setSelectionMode(false);
   loadChapters();
 }
 
@@ -1166,13 +1160,25 @@ bulkUnreadBtn.addEventListener("click", () => bulkSetRead(false));
 
 recheckSeriesBtn.addEventListener("click", async () => {
   recheckSeriesBtn.disabled = true;
-  recheckSeriesBtn.textContent = "...";
-  await fetch(`/api/series/${currentSeriesId}/recheck`, { method: "POST" });
+  detailMenuBtn.classList.add("busy");
+  try {
+    await fetch(`/api/series/${currentSeriesId}/recheck`, { method: "POST" });
+    await loadSeriesDetail();
+    await loadChapters();
+  } finally {
+    recheckSeriesBtn.disabled = false;
+    detailMenuBtn.classList.remove("busy");
+  }
+});
+
+resetProgressBtn.addEventListener("click", async () => {
+  if (!confirm("Remettre tous les chapitres de cette série en « non lu » ? Ils disparaîtront aussi de l'historique de lecture.")) return;
+  await fetch(`/api/series/${currentSeriesId}/reset-progress`, { method: "POST" });
   await loadSeriesDetail();
   await loadChapters();
-  recheckSeriesBtn.disabled = false;
-  recheckSeriesBtn.textContent = "↻ Actualiser";
 });
+
+categoryMenuBtn.addEventListener("click", () => categoryActionBtn.click());
 
 removeSeriesBtn.addEventListener("click", async () => {
   if (!confirm("Retirer cette série de la bibliothèque ?")) return;
@@ -1206,9 +1212,6 @@ synopsisToggle.addEventListener("click", () => {
   const expanded = detailSynopsisWrap.classList.toggle("expanded");
   synopsisToggle.textContent = expanded ? "voir moins" : "voir plus";
 });
-
-editSeriesBtn.addEventListener("click", () => editForm.classList.toggle("hidden"));
-editCancelBtn.addEventListener("click", () => editForm.classList.add("hidden"));
 
 // --- Alignement StickScans <- AniList, et synchro automatique de l'état AniList ---
 const anilistAlignBanner = document.getElementById("anilist-align-banner");
@@ -1377,20 +1380,6 @@ anilistUnlinkBtn.addEventListener("click", async () => {
   const res = await fetch(`/api/series/${currentSeriesId}/anilist`, { method: "DELETE" });
   const data = await res.json();
   renderAnilistSection(data);
-});
-
-editSaveBtn.addEventListener("click", async () => {
-  await fetch(`/api/series/${currentSeriesId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      editCoverInput.value !== editInitialCover
-        ? { title: editTitleInput.value, cover_url: editCoverInput.value }
-        : { title: editTitleInput.value },
-    ),
-  });
-  editForm.classList.add("hidden");
-  loadSeriesDetail();
 });
 
 refreshAllBtn.addEventListener("click", async () => {
