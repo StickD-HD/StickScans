@@ -930,6 +930,7 @@ async function openChaptersView(seriesId) {
   currentSeriesId = seriesId;
   currentChapters = [];
   currentAnilistProgress = null;
+  notesDirty = false;
   anilistAlignBanner.classList.add("hidden");
   setSelectionMode(false);
   if (chaptersView.classList.contains("hidden")) {
@@ -1261,6 +1262,63 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") syncAnilist();
 });
 
+// --- Notes AniList : un petit texte libre sur la série (champ « Notes » de ta liste AniList) ---
+const anilistNotes = document.getElementById("anilist-notes");
+const anilistNotesInput = document.getElementById("anilist-notes-input");
+const anilistNotesCount = document.getElementById("anilist-notes-count");
+const anilistNotesSave = document.getElementById("anilist-notes-save");
+const anilistNotesMsg = document.getElementById("anilist-notes-msg");
+let savedNotes = "";      // dernière valeur connue côté AniList
+let notesDirty = false;   // du texte a été saisi et pas encore enregistré : une synchro ne doit pas l'écraser
+let notesSaving = false;
+
+function refreshNotesUI() {
+  anilistNotesCount.textContent = `${anilistNotesInput.value.length}/${anilistNotesInput.maxLength}`;
+  anilistNotesSave.disabled = !notesDirty || notesSaving;
+}
+
+function renderNotes(s) {
+  anilistNotes.classList.toggle("hidden", !s.anilist_id);
+  if (!s.anilist_id) return;
+  savedNotes = s.anilist_notes || "";
+  if (!notesDirty) anilistNotesInput.value = savedNotes;
+  refreshNotesUI();
+}
+
+anilistNotesInput.addEventListener("input", () => {
+  notesDirty = anilistNotesInput.value.trim() !== savedNotes;
+  anilistNotesMsg.textContent = "";
+  refreshNotesUI();
+});
+
+async function saveNotes() {
+  if (notesSaving || !notesDirty) return;
+  notesSaving = true;
+  refreshNotesUI();
+  anilistNotesMsg.textContent = "Enregistrement…";
+  const text = anilistNotesInput.value.trim();
+  try {
+    const res = await fetch(`/api/series/${currentSeriesId}/anilist/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: text }), // chaîne vide = effacer la note
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Enregistrement refusé");
+    // Erreur côté AniList (jeton refusé, réseau...) : on garde le texte saisi pour ne rien perdre.
+    const failed = Boolean(data.anilist_last_error);
+    if (!failed) notesDirty = false;
+    renderAnilistSection(data);
+    anilistNotesMsg.textContent = failed ? "⚠️ " + data.anilist_last_error : text ? "Note enregistrée ✓" : "Note effacée";
+  } catch (e) {
+    anilistNotesMsg.textContent = "⚠️ " + e.message;
+  } finally {
+    notesSaving = false;
+    refreshNotesUI();
+  }
+}
+anilistNotesSave.addEventListener("click", saveNotes);
+
 function renderAnilistSection(s) {
   if (s.anilist_id) {
     anilistActionBtn.textContent = "✓ " + (s.anilist_title || "AniList");
@@ -1283,6 +1341,7 @@ function renderAnilistSection(s) {
   }
   currentAnilistProgress = s.anilist_id ? (s.anilist_progress || 0) : null;
   updateAlignBanner();
+  renderNotes(s);
   // Repliée par défaut à chaque (re)chargement de la fiche.
   anilistLinked.classList.add("hidden");
 }

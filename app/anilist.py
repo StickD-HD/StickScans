@@ -61,6 +61,7 @@ query ($id: Int, $scoreFormat: ScoreFormat) {
     mediaListEntry {
       status
       progress
+      notes
       score(format: $scoreFormat)
       startedAt { year month day }
       completedAt { year month day }
@@ -70,13 +71,14 @@ query ($id: Int, $scoreFormat: ScoreFormat) {
 """
 
 SAVE_ENTRY_MUTATION = """
-mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus, $score: Float,
+mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus, $score: Float, $notes: String,
           $startedAt: FuzzyDateInput, $completedAt: FuzzyDateInput) {
-  SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status, score: $score,
+  SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status, score: $score, notes: $notes,
                       startedAt: $startedAt, completedAt: $completedAt) {
     status
     progress
     score
+    notes
     startedAt { year month day }
     completedAt { year month day }
   }
@@ -279,6 +281,7 @@ def fetch_entry(media_id: int) -> dict:
         "start_date": _from_fuzzy_date(entry.get("startedAt")),
         "end_date": _from_fuzzy_date(entry.get("completedAt")),
         "cover_url": safe_image_url((media.get("coverImage") or {}).get("large")),
+        "notes": entry.get("notes"),
     }
 
 
@@ -314,8 +317,9 @@ def unlink_series(series_id: int):
     database.set_series_anilist_link(series_id, None, None)
 
 
-def push_update(series_id: int, status=None, progress=None, score=None, start_date=None, end_date=None):
-    """Pousse un changement vers AniList, puis resynchronise le miroir local avec la réponse complète."""
+def push_update(series_id: int, status=None, progress=None, score=None, start_date=None, end_date=None, notes=None):
+    """Pousse un changement vers AniList, puis resynchronise le miroir local avec la réponse complète.
+    notes : texte du champ « Notes » ; une chaîne vide efface la note, None la laisse telle quelle."""
     series = database.get_series_by_id(series_id)
     if not series or not series.get("anilist_id"):
         return
@@ -330,6 +334,8 @@ def push_update(series_id: int, status=None, progress=None, score=None, start_da
         variables["progress"] = progress
     if score is not None:
         variables["score"] = score
+    if notes is not None:
+        variables["notes"] = notes
     if start_date is not None:
         variables["startedAt"] = _to_fuzzy_date(start_date)
     if end_date is not None:
@@ -352,6 +358,7 @@ def push_update(series_id: int, status=None, progress=None, score=None, start_da
             score=entry.get("score"),
             start_date=_from_fuzzy_date(entry.get("startedAt")),
             end_date=_from_fuzzy_date(entry.get("completedAt")),
+            notes=entry.get("notes"),
         )
         logger.info("AniList mis à jour pour %s", series["title"])
     except Exception as e:
@@ -393,6 +400,7 @@ query ($userName: String, $scoreFormat: ScoreFormat, $chunk: Int) {
         mediaId
         media { coverImage { large } }
         status
+        notes
         progress
         score(format: $scoreFormat)
         startedAt { year month day }
@@ -443,6 +451,7 @@ def _fetch_collection(user_name: str) -> dict[int, dict]:
                     "start_date": _from_fuzzy_date(e.get("startedAt")),
                     "end_date": _from_fuzzy_date(e.get("completedAt")),
                     "cover_url": safe_image_url(((e.get("media") or {}).get("coverImage") or {}).get("large")),
+                    "notes": e.get("notes"),
                 }
         if not collection.get("hasNextChunk"):
             break
@@ -475,13 +484,14 @@ def sync_all(force: bool = False) -> dict:
                 # Série absente de la liste : on garde la couverture déjà connue plutôt que de l'effacer.
                 cover = entry.get("cover_url") if entry else s.get("anilist_cover_url")
                 new = (entry.get("status"), entry.get("progress"), entry.get("score"),
-                       entry.get("start_date"), entry.get("end_date"), cover)
+                       entry.get("start_date"), entry.get("end_date"), cover, entry.get("notes"))
                 old = (s.get("anilist_status"), s.get("anilist_progress"), s.get("anilist_score"),
-                       s.get("anilist_start_date"), s.get("anilist_end_date"), s.get("anilist_cover_url"))
+                       s.get("anilist_start_date"), s.get("anilist_end_date"), s.get("anilist_cover_url"),
+                       s.get("anilist_notes"))
                 if new != old:
                     database.set_series_anilist_data(
                         s["id"], status=new[0], progress=new[1], score=new[2], start_date=new[3], end_date=new[4],
-                        cover_url=new[5],
+                        cover_url=new[5], notes=new[6],
                     )
                     updated += 1
                 elif s.get("anilist_last_error"):

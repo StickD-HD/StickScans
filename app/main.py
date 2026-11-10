@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import anilist, auth, database
 from . import scraper as scraper_module
@@ -145,6 +145,7 @@ class AnilistUpdateRequest(BaseModel):
     score: float | None = None
     start_date: str | None = None
     end_date: str | None = None
+    notes: str | None = Field(default=None, max_length=500)  # "" = effacer la note
 
 
 @app.get("/login")
@@ -558,6 +559,7 @@ def update_anilist(series_id: int, payload: AnilistUpdateRequest):
         score=payload.score,
         start_date=payload.start_date,
         end_date=payload.end_date,
+        notes=payload.notes,
     )
     return database.get_series_by_id(series_id)
 

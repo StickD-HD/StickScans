@@ -116,6 +116,7 @@ NEW_SERIES_COLUMNS = {
     "anilist_start_date": "TEXT",
     "anilist_end_date": "TEXT",
     "anilist_cover_url": "TEXT",
+    "anilist_notes": "TEXT",
 }
 
 NEW_CHAPTERS_COLUMNS = {
@@ -888,7 +889,8 @@ def set_series_anilist_link(series_id: int, anilist_id: int | None, title: str |
             UPDATE series
             SET anilist_id = ?, anilist_title = ?, anilist_last_error = NULL,
                 anilist_status = NULL, anilist_progress = NULL, anilist_score = NULL,
-                anilist_start_date = NULL, anilist_end_date = NULL, anilist_cover_url = NULL
+                anilist_start_date = NULL, anilist_end_date = NULL, anilist_cover_url = NULL,
+                anilist_notes = NULL
             WHERE id = ?
             """,
             (anilist_id, title, series_id),
@@ -899,8 +901,9 @@ _UNSET = object()
 
 
 def set_series_anilist_data(series_id: int, status=None, progress=None, score=None,
-                             start_date=None, end_date=None, cover_url=_UNSET):
-    """cover_url : couverture AniList. Si l'argument est absent, celle déjà enregistrée est conservée."""
+                             start_date=None, end_date=None, cover_url=_UNSET, notes=_UNSET):
+    """cover_url : couverture AniList ; notes : texte du champ « Notes » de la liste AniList.
+    Si l'un de ces deux arguments est absent, la valeur déjà enregistrée est conservée."""
     with get_conn() as conn:
         conn.execute(
             """
@@ -913,6 +916,8 @@ def set_series_anilist_data(series_id: int, status=None, progress=None, score=No
         )
         if cover_url is not _UNSET:
             conn.execute("UPDATE series SET anilist_cover_url = ? WHERE id = ?", (cover_url, series_id))
+        if notes is not _UNSET:
+            conn.execute("UPDATE series SET anilist_notes = ? WHERE id = ?", (notes, series_id))
 
 
 def set_series_anilist_error(series_id: int, error: str | None):
