@@ -91,6 +91,8 @@ const homeMenuBtn = document.getElementById("home-menu-btn");
 const homeMenu = document.getElementById("home-menu");
 const filterBadge = document.getElementById("filter-badge");
 const refreshAllLabel = document.getElementById("refresh-all-label");
+const randomSeriesBtn = document.getElementById("random-series-btn");
+let libraryShown = []; // séries actuellement affichées dans la bibliothèque (donc déjà filtrées)
 
 const categoryModal = document.getElementById("category-modal");
 const categoryManageList = document.getElementById("category-manage-list");
@@ -120,7 +122,7 @@ const detailEditor = document.getElementById("detail-editor");
 const detailTeam = document.getElementById("detail-team");
 const detailSourceLink = document.getElementById("detail-source-link");
 const anilistActionBtn = document.getElementById("anilist-action-btn");
-const categoryActionBtn = document.getElementById("category-action-btn");
+const libraryBtn = document.getElementById("library-btn");
 const seriesCategoryModal = document.getElementById("series-category-modal");
 const seriesCategoryModalClose = document.getElementById("series-category-modal-close");
 const anilistModal = document.getElementById("anilist-modal");
@@ -798,6 +800,14 @@ function setupPopover(button, menu) {
 setupPopover(homeMenuBtn, homeMenu);
 setupPopover(detailMenuBtn, detailMenu);
 
+randomSeriesBtn.addEventListener("click", () => {
+  if (libraryShown.length === 0) {
+    alert("Aucune série à ouvrir avec les filtres actuels.");
+    return;
+  }
+  openChaptersView(libraryShown[Math.floor(Math.random() * libraryShown.length)].id);
+});
+
 manageCategoriesBtn.addEventListener("click", () => {
   openModal(categoryModal);
   loadCategoryManageList();
@@ -901,6 +911,7 @@ async function loadLibrary() {
 
   const res = await fetch(`/api/series?${params}`);
   const series = await res.json();
+  libraryShown = series;
 
   grid.innerHTML = "";
   emptyMsg.classList.toggle("hidden", series.length > 0);
@@ -1169,7 +1180,12 @@ resetProgressBtn.addEventListener("click", async () => {
   await loadChapters();
 });
 
-categoryMenuBtn.addEventListener("click", () => categoryActionBtn.click());
+categoryMenuBtn.addEventListener("click", () => {
+  openModal(seriesCategoryModal);
+  loadSeriesCategories();
+});
+// « Dans la bibliothèque » : la bibliothèque est l'ensemble des séries, toutes catégories confondues ; un toucher la retire.
+libraryBtn.addEventListener("click", () => removeSeriesBtn.click());
 
 removeSeriesBtn.addEventListener("click", async () => {
   if (!confirm("Retirer cette série de la bibliothèque ?")) return;
@@ -1309,10 +1325,6 @@ anilistActionBtn.addEventListener("click", () => {
 });
 anilistModalClose.addEventListener("click", () => closeModal(anilistModal));
 
-categoryActionBtn.addEventListener("click", () => {
-  openModal(seriesCategoryModal);
-  loadSeriesCategories();
-});
 seriesCategoryModalClose.addEventListener("click", () => closeModal(seriesCategoryModal));
 
 anilistSearchBtn.addEventListener("click", async () => {

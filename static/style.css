@@ -310,7 +310,8 @@ main#library { padding: 0 18px; }
   display: flex; align-items: center; justify-content: center; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
-#detail-actions #category-action-btn { order: 1; }  /* en dernier : si la place manque, c'est lui qui passe à la ligne */
+#detail-actions #library-btn { order: 1; background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+/* en dernier : si la place manque, c'est lui qui passe à la ligne */
 #anilist-action-btn.linked { background: var(--accent2-soft); color: var(--accent2); border-color: var(--accent2); flex: 1 1 100%; }
 
 #detail-synopsis-wrap { position: relative; margin: 16px 0 10px; }
@@ -573,3 +574,14 @@ html, body { overscroll-behavior-x: none; }
   font: inherit; font-size: 0.9rem; line-height: 1.4;
 }
 .anilist-fields textarea:focus { outline: none; border-color: var(--accent); }
+
+/* Titre de l'accueil : logo + nom */
+.brand { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; }
+.brand-mark {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: none;
+  border-radius: 10px; color: #06101F; background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 4px 14px rgba(76, 141, 255, 0.35);
+}
+.brand-mark svg { width: 19px; height: 19px; }
+.brand-name { font-weight: 800; letter-spacing: -0.02em; }
+.brand-name b { font-weight: 800; color: var(--accent); }

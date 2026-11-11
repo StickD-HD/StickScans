@@ -38,7 +38,12 @@
 
   <div id="library-view">
     <header>
-      <h1>📚 Stickscans</h1>
+      <h1 class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5C4 4.67 4.67 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13Z"/><path d="M20 5.5c0-.83-.67-1.5-1.5-1.5H13v16h5.5c.83 0 1.5-.67 1.5-1.5v-13Z"/></svg>
+        </span>
+        <span class="brand-name">Stick<b>Scans</b></span>
+      </h1>
       <div class="header-actions">
         <span id="refresh-status-text"></span>
         <button id="search-toggle-btn" class="icon-btn" type="button" title="Rechercher" aria-label="Rechercher">
@@ -54,6 +59,7 @@
           </button>
           <div id="home-menu" class="popover hidden" role="menu">
             <button id="add-btn" type="button" role="menuitem">＋ Ajouter une série</button>
+            <button id="random-series-btn" type="button" role="menuitem">🎲 Ouvrir une série aléatoire</button>
             <button id="refresh-all-btn" type="button" role="menuitem"><span id="refresh-all-label">↻ Actualiser toutes les séries</span></button>
             <button id="manage-categories-btn" type="button" role="menuitem">🏷 Gérer les catégories</button>
           </div>
@@ -257,7 +263,7 @@
 
       <div id="detail-actions">
         <button id="anilist-action-btn">🔗 AniList</button>
-        <button id="category-action-btn" type="button">✓ Dans la bibliothèque</button>
+        <button id="library-btn" type="button" title="Retirer de la bibliothèque">✓ Dans la bibliothèque</button>
         <a id="detail-source-btn" class="action-btn-link" target="_blank" rel="noopener">🌐 Scan-Manga</a>
       </div>
 
