@@ -930,7 +930,6 @@ async function openChaptersView(seriesId) {
   currentSeriesId = seriesId;
   currentChapters = [];
   currentAnilistProgress = null;
-  notesDirty = false;
   anilistAlignBanner.classList.add("hidden");
   setSelectionMode(false);
   if (chaptersView.classList.contains("hidden")) {
@@ -1262,62 +1261,15 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") syncAnilist();
 });
 
-// --- Notes AniList : un petit texte libre sur la série (champ « Notes » de ta liste AniList) ---
-const anilistNotes = document.getElementById("anilist-notes");
+// --- Notes AniList : champ texte du panneau AniList (champ « Notes » de ta liste), enregistré avec le reste ---
 const anilistNotesInput = document.getElementById("anilist-notes-input");
 const anilistNotesCount = document.getElementById("anilist-notes-count");
-const anilistNotesSave = document.getElementById("anilist-notes-save");
-const anilistNotesMsg = document.getElementById("anilist-notes-msg");
-let savedNotes = "";      // dernière valeur connue côté AniList
-let notesDirty = false;   // du texte a été saisi et pas encore enregistré : une synchro ne doit pas l'écraser
-let notesSaving = false;
+let savedNotes = ""; // dernière valeur connue côté AniList : seule une note modifiée est envoyée
 
-function refreshNotesUI() {
+function updateNotesCount() {
   anilistNotesCount.textContent = `${anilistNotesInput.value.length}/${anilistNotesInput.maxLength}`;
-  anilistNotesSave.disabled = !notesDirty || notesSaving;
 }
-
-function renderNotes(s) {
-  anilistNotes.classList.toggle("hidden", !s.anilist_id);
-  if (!s.anilist_id) return;
-  savedNotes = s.anilist_notes || "";
-  if (!notesDirty) anilistNotesInput.value = savedNotes;
-  refreshNotesUI();
-}
-
-anilistNotesInput.addEventListener("input", () => {
-  notesDirty = anilistNotesInput.value.trim() !== savedNotes;
-  anilistNotesMsg.textContent = "";
-  refreshNotesUI();
-});
-
-async function saveNotes() {
-  if (notesSaving || !notesDirty) return;
-  notesSaving = true;
-  refreshNotesUI();
-  anilistNotesMsg.textContent = "Enregistrement…";
-  const text = anilistNotesInput.value.trim();
-  try {
-    const res = await fetch(`/api/series/${currentSeriesId}/anilist/update`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: text }), // chaîne vide = effacer la note
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Enregistrement refusé");
-    // Erreur côté AniList (jeton refusé, réseau...) : on garde le texte saisi pour ne rien perdre.
-    const failed = Boolean(data.anilist_last_error);
-    if (!failed) notesDirty = false;
-    renderAnilistSection(data);
-    anilistNotesMsg.textContent = failed ? "⚠️ " + data.anilist_last_error : text ? "Note enregistrée ✓" : "Note effacée";
-  } catch (e) {
-    anilistNotesMsg.textContent = "⚠️ " + e.message;
-  } finally {
-    notesSaving = false;
-    refreshNotesUI();
-  }
-}
-anilistNotesSave.addEventListener("click", saveNotes);
+anilistNotesInput.addEventListener("input", updateNotesCount);
 
 function renderAnilistSection(s) {
   if (s.anilist_id) {
@@ -1329,6 +1281,9 @@ function renderAnilistSection(s) {
     anilistStatusSelect.value = s.anilist_status || "CURRENT";
     anilistProgressInput.value = s.anilist_progress ?? "";
     anilistScoreInput.value = s.anilist_score ?? "";
+    savedNotes = s.anilist_notes || "";
+    anilistNotesInput.value = savedNotes;
+    updateNotesCount();
     anilistStartInput.value = s.anilist_start_date || "";
     anilistEndInput.value = s.anilist_end_date || "";
     anilistStatusText.textContent = s.anilist_last_error ? "⚠️ " + s.anilist_last_error : "";
@@ -1341,7 +1296,6 @@ function renderAnilistSection(s) {
   }
   currentAnilistProgress = s.anilist_id ? (s.anilist_progress || 0) : null;
   updateAlignBanner();
-  renderNotes(s);
   // Repliée par défaut à chaque (re)chargement de la fiche.
   anilistLinked.classList.add("hidden");
 }
@@ -1397,22 +1351,35 @@ anilistSearchBtn.addEventListener("click", async () => {
 
 anilistSaveBtn.addEventListener("click", async () => {
   anilistSaveBtn.disabled = true;
+  const typedNotes = anilistNotesInput.value.trim();
   try {
+    const payload = {
+      status: anilistStatusSelect.value,
+      progress: anilistProgressInput.value !== "" ? parseInt(anilistProgressInput.value, 10) : null,
+      score: anilistScoreInput.value !== "" ? parseFloat(anilistScoreInput.value) : null,
+      start_date: anilistStartInput.value || null,
+      end_date: anilistEndInput.value || null,
+    };
+    // La note n'est envoyée que si elle a changé : enregistrer autre chose n'écrase pas une note modifiée ailleurs.
+    // Une chaîne vide efface la note sur AniList.
+    if (typedNotes !== savedNotes) payload.notes = typedNotes;
     const res = await fetch(`/api/series/${currentSeriesId}/anilist/update`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: anilistStatusSelect.value,
-        progress: anilistProgressInput.value !== "" ? parseInt(anilistProgressInput.value, 10) : null,
-        score: anilistScoreInput.value !== "" ? parseFloat(anilistScoreInput.value) : null,
-        start_date: anilistStartInput.value || null,
-        end_date: anilistEndInput.value || null,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Erreur inconnue");
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Enregistrement refusé");
     renderAnilistSection(data);
-    if (!data.anilist_last_error) anilistStatusText.textContent = "Enregistré ✓";
+    // Le panneau reste ouvert : le message « Enregistré ✓ » ou l'erreur s'y affiche (il était invisible quand il se refermait).
+    anilistLinked.classList.remove("hidden");
+    if (data.anilist_last_error) {
+      // Erreur côté AniList (jeton refusé, réseau...) : le texte tapé n'est jamais perdu.
+      anilistNotesInput.value = typedNotes;
+      updateNotesCount();
+    } else {
+      anilistStatusText.textContent = "Enregistré ✓";
+    }
   } catch (e) {
     anilistStatusText.textContent = "⚠️ " + e.message;
   } finally {
