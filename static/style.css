@@ -23,6 +23,7 @@
 
 html {
   height: 100%;
+  background: var(--bg); /* même couleur sous l'encoche et lors du rebond de défilement */
 }
 
 body {
@@ -34,7 +35,6 @@ body {
   font-family: 'Manrope', -apple-system, system-ui, sans-serif;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
-  padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -122,10 +122,10 @@ header {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 16px 18px;
-  background: rgba(8, 13, 24, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  /* L'en-tête englobe la zone sous l'encoche / la barre d'état et reste opaque, sans flou : rien ne défile
+     visiblement derrière elle, et iOS n'a plus de bande à flouter au-dessus des boutons. */
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 18px 16px;
+  background: var(--bg);
   z-index: 10;
 }
 header h1 { font-size: 1.2rem; margin: 0; }
