@@ -159,6 +159,28 @@ def check_one_series(series: dict) -> dict:
     return database.get_series_by_id(series["id"])
 
 
+COMPLETED_STATUSES = {"terminé", "terminée", "completed"}
+SKIP_LABELS = {
+    "skip_completed": "terminée(s)",
+    "skip_unread": "avec des chapitres non lus",
+    "skip_never_read": "jamais lue(s)",
+}
+
+
+def skip_reason(series: dict, rules: dict) -> str | None:
+    """Clé du réglage qui fait ignorer cette série lors d'une vérification groupée, ou None si elle doit être vérifiée.
+    Une vérification d'une seule série (bouton « Actualiser » de sa fiche) ne passe jamais par ici."""
+    if rules.get("skip_completed") and (series.get("status") or "").strip().lower() in COMPLETED_STATUSES:
+        return "skip_completed"
+    unread = series.get("unread_count") or 0
+    read = (series.get("total_chapters") or 0) - unread
+    if rules.get("skip_unread") and unread > 0:
+        return "skip_unread"
+    if rules.get("skip_never_read") and read <= 0:
+        return "skip_never_read"
+    return None
+
+
 def check_all_series(trigger: str = "auto"):
     with _progress_lock:
         if _progress["is_running"]:
@@ -169,30 +191,38 @@ def check_all_series(trigger: str = "auto"):
     run_id = None
     started = time.monotonic()
     try:
-        all_series = database.get_all_series()
-        _set_progress(total=len(all_series))
-        run_id = database.start_check_run(trigger, len(all_series))
-        checks_log.info("=== Vérification [%s] : début, %d série(s) ===", trigger, len(all_series))
+        rules = database.get_update_settings()
+        queue, skipped = [], {}
+        for series in database.get_all_series():
+            reason = skip_reason(series, rules)
+            if reason:
+                skipped[reason] = skipped.get(reason, 0) + 1
+            else:
+                queue.append(series)
+        n_skipped = sum(skipped.values())
+        skipped_detail = ""
+        if n_skipped:
+            skipped_detail = " (%d ignorée(s) par les réglages : %s)" % (
+                n_skipped, ", ".join(f"{n} {SKIP_LABELS[k]}" for k, n in skipped.items()))
+
+        _set_progress(total=len(queue))
+        run_id = database.start_check_run(trigger, len(queue))
+        checks_log.info("=== Vérification [%s] : début, %d série(s)%s ===", trigger, len(queue), skipped_detail)
 
         ok = errors = new_chapters = from_cache = 0
         interrupted = False
         slowest = (0.0, "")
         use_cache = trigger == "auto" and scrape_cache.MODE in ("read", "both")
         scrape_cache.purge_old()
-        for i, series in enumerate(all_series):
+        for i, series in enumerate(queue):
             _set_progress(current_title=series.get("title"))
-            
-            status = (series.get("status") or "").strip().lower()
-            if status in ("terminé", "terminée", "completed"):
-                _set_progress(completed=i + 1)
-                continue
 
             result = _check(series, run_id, use_cache=use_cache, bulk=True)
             if result["blocked"]:
                 # Le site refuse les requêtes : inutile d'insister avec les séries restantes.
                 interrupted = True
                 errors += 1
-                _set_progress(completed=len(all_series))
+                _set_progress(completed=len(queue))
                 break
             from_cache += 1 if result["source"] == "cache" else 0
             ok += 1 if result["ok"] else 0
@@ -202,7 +232,7 @@ def check_all_series(trigger: str = "auto"):
                 slowest = (result["duration"], series.get("title") or series["url"])
             _set_progress(completed=i + 1)
             # La pause ne sert qu'entre deux vraies requêtes vers le site : rien à attendre après une copie.
-            if i < len(all_series) - 1 and result["source"] != "cache":
+            if i < len(queue) - 1 and result["source"] != "cache":
                 time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
 
         if interrupted:

@@ -102,11 +102,136 @@
   </div>
 
   <div id="settings-view" class="hidden">
-    <header><h1>Réglages</h1></header>
+    <header>
+      <button id="settings-back-btn" class="hidden" type="button">← Retour</button>
+      <h1 id="settings-title">Réglages</h1>
+    </header>
     <main id="settings-main">
-      <section class="settings-section">
-        <h2>AniList</h2>
 
+      <!-- ===== Liste des rubriques ===== -->
+      <div id="settings-home">
+        <h3 class="settings-group">Bibliothèque</h3>
+        <div class="settings-list">
+        <button class="settings-row" type="button" data-page="display">
+          <span class="settings-ico">🖼</span>
+          <span class="settings-txt"><strong>Affichage</strong><small>Grille ou liste, colonnes, informations</small></span>
+          <span class="settings-chev">›</span>
+        </button>
+        <button class="settings-row" type="button" data-page="categories">
+          <span class="settings-ico">🏷</span>
+          <span class="settings-txt"><strong>Catégories</strong><small>Créer, renommer, supprimer</small></span>
+          <span class="settings-chev">›</span>
+        </button>
+        <button class="settings-row" type="button" data-page="updates">
+          <span class="settings-ico">↻</span>
+          <span class="settings-txt"><strong>Mises à jour</strong><small>Quelles séries vérifier</small></span>
+          <span class="settings-chev">›</span>
+        </button>
+        </div>
+
+        <h3 class="settings-group">Comptes et données</h3>
+        <div class="settings-list">
+        <button class="settings-row" type="button" data-page="anilist">
+          <span class="settings-ico">🔗</span>
+          <span class="settings-txt"><strong>AniList</strong><small>Compte et synchronisation</small></span>
+          <span class="settings-chev">›</span>
+        </button>
+        <button class="settings-row" type="button" data-page="storage">
+          <span class="settings-ico">💾</span>
+          <span class="settings-txt"><strong>Stockage</strong><small>Espace utilisé, cache, nettoyage</small></span>
+          <span class="settings-chev">›</span>
+        </button>
+        <button class="settings-row" type="button" data-page="backup">
+          <span class="settings-ico">🛟</span>
+          <span class="settings-txt"><strong>Sauvegarde et restauration</strong><small>Copies de ta base, export et import</small></span>
+          <span class="settings-chev">›</span>
+        </button>
+        </div>
+
+        <h3 class="settings-group">Suivi</h3>
+        <div class="settings-list">
+        <button class="settings-row" type="button" id="open-reading-btn">
+          <span class="settings-ico">📊</span>
+          <span class="settings-txt"><strong>Aperçu de lecture</strong><small>Temps passé et séries les plus lues</small></span>
+          <span class="settings-chev">›</span>
+        </button>
+        <button class="settings-row" type="button" id="open-checks-btn">
+          <span class="settings-ico">📋</span>
+          <span class="settings-txt"><strong>Vérifications</strong><small>Journal des mises à jour des séries</small></span>
+          <span class="settings-chev">›</span>
+        </button>
+        </div>
+
+        <div id="auth-section" class="settings-list hidden">
+          <button id="logout-btn" class="settings-row danger-row" type="button">
+            <span class="settings-ico">⏻</span>
+            <span class="settings-txt"><strong>Se déconnecter</strong><small>De cet appareil</small></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== Affichage ===== -->
+      <div class="settings-page hidden" data-page="display" data-title="Affichage">
+        <section class="settings-section">
+          <h2>Aperçu</h2>
+          <div id="display-preview-grid" class="grid"></div>
+        </section>
+        <section class="settings-section">
+          <h2>Mode</h2>
+          <div class="segmented" id="display-mode">
+            <button type="button" data-value="grid">Grille</button>
+            <button type="button" data-value="list">Liste</button>
+          </div>
+        </section>
+        <section class="settings-section" id="display-cols-section">
+          <h2>Couvertures par ligne</h2>
+          <div class="segmented" id="display-cols">
+            <button type="button" data-value="0">Auto</button>
+            <button type="button" data-value="2">2</button>
+            <button type="button" data-value="3">3</button>
+            <button type="button" data-value="4">4</button>
+            <button type="button" data-value="5">5</button>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h2>Informations affichées</h2>
+          <label class="switch-row"><span><strong>Chapitres non lus</strong><small>Pastille sur la couverture</small></span><input type="checkbox" class="switch" id="display-badge"></label>
+          <label class="switch-row"><span><strong>Dernier chapitre</strong><small>Sous le titre</small></span><input type="checkbox" class="switch" id="display-lastchapter"></label>
+          <label class="switch-row"><span><strong>Titre sur une ligne</strong><small>Plus compact, titres coupés</small></span><input type="checkbox" class="switch" id="display-singleline"></label>
+        </section>
+        <p class="section-label settings-note">Ces choix sont propres à cet appareil.</p>
+      </div>
+
+      <!-- ===== Catégories ===== -->
+      <div class="settings-page hidden" data-page="categories" data-title="Catégories">
+        <section class="settings-section">
+          <h2>Mes catégories</h2>
+          <p class="section-label">Une série peut appartenir à plusieurs catégories. La bibliothèque, elle, contient toujours toutes les séries.</p>
+          <ul id="category-manage-list"></ul>
+          <div class="new-category-row">
+            <input id="new-category-input" type="text" placeholder="Nouvelle catégorie">
+            <button id="new-category-btn">Ajouter</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ===== Mises à jour ===== -->
+      <div class="settings-page hidden" data-page="updates" data-title="Mises à jour">
+        <section class="settings-section">
+          <h2>Séries à ignorer</h2>
+          <p class="section-label">Ces séries ne sont pas vérifiées lors des mises à jour automatiques ni avec « Actualiser toutes les séries ». Moins de requêtes vers le site.</p>
+          <label class="switch-row"><span><strong>Séries terminées</strong><small>Statut « Terminé »</small></span><input type="checkbox" class="switch" id="upd-skip-completed"></label>
+          <label class="switch-row"><span><strong>Avec des chapitres non lus</strong><small>Tant que tu n'as pas rattrapé ton retard</small></span><input type="checkbox" class="switch" id="upd-skip-unread"></label>
+          <label class="switch-row"><span><strong>Jamais lues</strong><small>Aucun chapitre marqué comme lu</small></span><input type="checkbox" class="switch" id="upd-skip-neverread"></label>
+        </section>
+        <p class="section-label settings-note">« Actualiser » dans la fiche d'une série vérifie toujours cette série, quels que soient ces réglages.</p>
+        <p id="upd-msg" class="section-label settings-note"></p>
+      </div>
+
+      <!-- ===== AniList ===== -->
+      <div class="settings-page hidden" data-page="anilist" data-title="AniList">
+        <section class="settings-section">
+          <h2>Compte AniList</h2>
         <div id="anilist-connected" class="hidden">
           <div class="anilist-account">
             <img id="anilist-avatar" alt="" class="hidden">
@@ -142,33 +267,63 @@
             <button id="anilist-token-cancel" class="hidden">Annuler</button>
           </div>
         </div>
-      </section>
-      <section class="settings-section">
-        <h2>Aperçu de lecture</h2>
-        <p class="section-label">Temps passé à lire, séries et genres les plus lus, rythme : tes statistiques en graphiques.</p>
-        <button id="open-reading-btn">Voir mon aperçu</button>
-      </section>
-      <section class="settings-section">
-        <h2>Vérifications</h2>
-        <p class="section-label">Durée, erreurs et détail de chaque mise à jour des séries.</p>
-        <button id="open-checks-btn">Voir le journal</button>
-      </section>
+        </section>
+      </div>
 
-	<section class="settings-section">
-        <h2>Export & Import</h2>
-        <p class="section-label">Gère les données de ton application (séries, historique, jeton AniList).</p>
-        <div class="settings-actions">
-          <button id="download-db-btn">Exporter la base</button>
-          <button id="import-db-btn" class="danger-btn">Importer une base</button>
-          <input type="file" id="import-db-input" accept=".db" class="hidden">
-        </div>
-      </section>
+      <!-- ===== Stockage ===== -->
+      <div class="settings-page hidden" data-page="storage" data-title="Stockage">
+        <section class="settings-section">
+          <h2>Espace utilisé</h2>
+          <div id="storage-total" class="storage-total">…</div>
+          <div id="storage-bar" class="storage-bar"></div>
+          <ul id="storage-list" class="info-list"></ul>
+          <p id="storage-disk" class="section-label"></p>
+        </section>
+        <section class="settings-section">
+          <h2>Nettoyage</h2>
+          <div class="action-list">
+            <button class="action-row" id="clear-cache-btn" type="button"><strong>Vider le cache des pages</strong><small id="clear-cache-info"></small></button>
+            <button class="action-row" id="clear-logs-btn" type="button"><strong>Effacer les journaux</strong><small id="clear-logs-info"></small></button>
+            <button class="action-row" id="clear-checks-btn" type="button"><strong>Effacer le détail des vérifications</strong><small id="clear-checks-info"></small></button>
+            <button class="action-row" id="optimize-db-btn" type="button"><strong>Optimiser la base</strong><small>Récupère l'espace des données supprimées</small></button>
+          </div>
+          <p id="storage-msg" class="section-label"></p>
+        </section>
+        <section class="settings-section">
+          <h2>Cet appareil</h2>
+          <div class="action-list">
+            <button class="action-row" id="clear-app-cache-btn" type="button"><strong>Vider le cache de l'application</strong><small>Recharge l'appli avec les derniers fichiers</small></button>
+            <button class="action-row" id="reset-prefs-btn" type="button"><strong>Réinitialiser l'affichage et les filtres</strong><small>Retour aux réglages d'origine sur cet appareil</small></button>
+          </div>
+        </section>
+      </div>
 
-      <section id="auth-section" class="settings-section hidden">
-        <h2>Session</h2>
-        <p class="section-label">Te déconnecter de cet appareil.</p>
-        <button id="logout-btn">Se déconnecter</button>
-      </section>
+      <!-- ===== Sauvegarde et restauration ===== -->
+      <div class="settings-page hidden" data-page="backup" data-title="Sauvegarde">
+        <section class="settings-section">
+          <h2>Sauvegarde automatique</h2>
+          <label class="switch-row"><span><strong>Sauvegarde quotidienne</strong><small>Chaque nuit à 3 h, et au démarrage</small></span><input type="checkbox" class="switch" id="backup-enabled"></label>
+          <label class="switch-row"><span><strong>Copies conservées</strong><small>Les plus anciennes sont supprimées</small></span>
+            <select id="backup-keep"><option value="3">3</option><option value="7">7</option><option value="14">14</option><option value="30">30</option></select>
+          </label>
+        </section>
+        <section class="settings-section">
+          <h2>Mes sauvegardes</h2>
+          <button id="backup-now-btn" type="button" class="primary-btn">Sauvegarder maintenant</button>
+          <ul id="backup-list" class="backup-list"></ul>
+          <p id="backup-msg" class="section-label"></p>
+        </section>
+        <section class="settings-section">
+          <h2>Export et import</h2>
+          <p class="section-label">Télécharge ta base (séries, historique, jeton AniList) ou remplace-la par un fichier. Une copie de sécurité est faite avant un import.</p>
+          <div class="settings-actions">
+            <button id="download-db-btn">Exporter la base</button>
+            <button id="import-db-btn" class="danger-btn">Importer une base</button>
+            <input type="file" id="import-db-input" accept=".db" class="hidden">
+          </div>
+        </section>
+      </div>
+
     </main>
   </div>
 
@@ -218,18 +373,6 @@
         Masquer les séries entièrement lues
       </label>
       <button id="filter-modal-close">Fermer</button>
-    </div>
-  </div>
-
-  <div id="category-modal" class="hidden">
-    <div id="category-modal-content">
-      <h2>Catégories</h2>
-      <ul id="category-manage-list"></ul>
-      <div class="new-category-row">
-        <input id="new-category-input" type="text" placeholder="Nouvelle catégorie">
-        <button id="new-category-btn">Ajouter</button>
-      </div>
-      <button id="category-modal-close">Fermer</button>
     </div>
   </div>
 

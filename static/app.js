@@ -94,11 +94,9 @@ const refreshAllLabel = document.getElementById("refresh-all-label");
 const randomSeriesBtn = document.getElementById("random-series-btn");
 let libraryShown = []; // séries actuellement affichées dans la bibliothèque (donc déjà filtrées)
 
-const categoryModal = document.getElementById("category-modal");
 const categoryManageList = document.getElementById("category-manage-list");
 const newCategoryInput = document.getElementById("new-category-input");
 const newCategoryBtn = document.getElementById("new-category-btn");
-const categoryModalClose = document.getElementById("category-modal-close");
 
 const backBtn = document.getElementById("back-btn");
 const recheckSeriesBtn = document.getElementById("recheck-series-btn");
@@ -192,7 +190,7 @@ function closeModal(el) {
   else el.classList.add("hidden");
 }
 
-[categoryModal, filterModal, anilistModal, seriesCategoryModal].forEach((m) => {
+[filterModal, anilistModal, seriesCategoryModal].forEach((m) => {
   m.addEventListener("click", (e) => { if (e.target === m) closeModal(m); });
 });
 
@@ -241,7 +239,7 @@ navButtons.forEach((btn) => {
     goToTopView(btn.dataset.view);
     if (btn.dataset.view === "updates-view") loadUpdates();
     if (btn.dataset.view === "history-view") loadHistory();
-    if (btn.dataset.view === "settings-view") loadSettingsAnilistStatus();
+    if (btn.dataset.view === "settings-view") showSettingsPage(null);
   });
 });
 
@@ -808,11 +806,7 @@ randomSeriesBtn.addEventListener("click", () => {
   openChaptersView(libraryShown[Math.floor(Math.random() * libraryShown.length)].id);
 });
 
-manageCategoriesBtn.addEventListener("click", () => {
-  openModal(categoryModal);
-  loadCategoryManageList();
-});
-categoryModalClose.addEventListener("click", () => closeModal(categoryModal));
+manageCategoriesBtn.addEventListener("click", () => openSettingsPage("categories"));
 
 searchToggleBtn.addEventListener("click", () => {
   searchBar.classList.toggle("hidden");
@@ -1837,5 +1831,400 @@ async function loadReadingOverview() {
     box.innerHTML = '<p class="error">Impossible de charger les statistiques.</p>';
   }
 }
+
+// ======================================================================
+// Réglages : liste des rubriques, puis une page par rubrique
+// ======================================================================
+const settingsHome = document.getElementById("settings-home");
+const settingsTitle = document.getElementById("settings-title");
+const settingsBackBtn = document.getElementById("settings-back-btn");
+const settingsPageEls = document.querySelectorAll(".settings-page");
+
+const SETTINGS_PAGE_LOADERS = {
+  display: () => loadDisplayPage(),
+  categories: () => loadCategoryManageList(),
+  updates: () => loadUpdateSettings(),
+  anilist: () => loadSettingsAnilistStatus(),
+  storage: () => loadStorage(),
+  backup: () => loadBackups(),
+};
+
+// name = null : retour à la liste des rubriques.
+function showSettingsPage(name) {
+  let title = "Réglages";
+  settingsPageEls.forEach((page) => {
+    const active = page.dataset.page === name;
+    page.classList.toggle("hidden", !active);
+    if (active) title = page.dataset.title;
+  });
+  settingsHome.classList.toggle("hidden", Boolean(name));
+  settingsBackBtn.classList.toggle("hidden", !name);
+  settingsTitle.textContent = title;
+  window.scrollTo(0, 0);
+  if (name && SETTINGS_PAGE_LOADERS[name]) SETTINGS_PAGE_LOADERS[name]();
+}
+
+function openSettingsPage(name) {
+  goToTopView("settings-view");
+  navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === "settings-view"));
+  lastTopView = "settings-view";
+  showSettingsPage(name);
+}
+
+settingsHome.addEventListener("click", (e) => {
+  const row = e.target.closest("[data-page]");
+  if (row) showSettingsPage(row.dataset.page);
+});
+settingsBackBtn.addEventListener("click", () => showSettingsPage(null));
+
+function formatBytes(n) {
+  if (!n) return "0 o";
+  const units = ["o", "Ko", "Mo", "Go", "To"];
+  let value = n;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i++;
+  }
+  return `${value.toLocaleString("fr-FR", { maximumFractionDigits: value < 10 && i > 0 ? 1 : 0 })} ${units[i]}`;
+}
+
+const plural = (n, one, many) => `${n.toLocaleString("fr-FR")} ${n > 1 ? many : one}`;
+
+// ----------------------------------------------------------------------
+// Affichage de la bibliothèque (propre à l'appareil : stocké dans le navigateur)
+// ----------------------------------------------------------------------
+const DISPLAY_KEY = "stickscans_display";
+const DISPLAY_DEFAULTS = { mode: "grid", cols: 0, badge: true, lastChapter: true, singleLine: false };
+const displayMode = document.getElementById("display-mode");
+const displayCols = document.getElementById("display-cols");
+const displayColsSection = document.getElementById("display-cols-section");
+const displayBadge = document.getElementById("display-badge");
+const displayLastChapter = document.getElementById("display-lastchapter");
+const displaySingleLine = document.getElementById("display-singleline");
+const displayPreviewGrid = document.getElementById("display-preview-grid");
+
+function getDisplayPrefs() {
+  try {
+    return { ...DISPLAY_DEFAULTS, ...(JSON.parse(localStorage.getItem(DISPLAY_KEY)) || {}) };
+  } catch (e) {
+    return { ...DISPLAY_DEFAULTS };
+  }
+}
+
+function applyDisplayPrefs() {
+  const p = getDisplayPrefs();
+  for (const g of [grid, displayPreviewGrid]) {
+    g.classList.toggle("list", p.mode === "list");
+    g.classList.toggle("custom-cols", p.mode === "grid" && p.cols > 0);
+    g.style.setProperty("--cols", p.cols > 0 ? String(p.cols) : "");
+  }
+  document.body.classList.toggle("no-unread-badge", !p.badge);
+  document.body.classList.toggle("no-last-chapter", !p.lastChapter);
+  document.body.classList.toggle("single-line-title", p.singleLine);
+}
+
+function updateDisplayPrefs(patch) {
+  try {
+    localStorage.setItem(DISPLAY_KEY, JSON.stringify({ ...getDisplayPrefs(), ...patch }));
+  } catch (e) {}
+  applyDisplayPrefs();
+  loadDisplayPage();
+}
+
+function setSegmented(container, value) {
+  container.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.value === String(value)));
+}
+
+function renderDisplayPreview() {
+  const cover = (hue) =>
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='200' height='300'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${hue},65%,55%)'/><stop offset='1' stop-color='hsl(${hue + 50},60%,28%)'/></linearGradient></defs><rect width='200' height='300' fill='url(#g)'/></svg>`);
+  const samples = [["Solo Leveling", "Ch. 201", 3], ["Tower of God", "Ch. 640", 0], ["Omniscient Reader", "Ch. 245", 12],
+                   ["The Beginning After the End", "Ch. 215", 1], ["Pick Me Up!", "Ch. 120", 0], ["Return of the Mount Hua Sect", "Ch. 184", 5]];
+  displayPreviewGrid.innerHTML = samples.map(([title, chapter, unread], i) => `
+    <div class="card">
+      <div class="cover-wrap">
+        <img src="${cover(i * 60)}" alt="">
+        <div class="badge-stack">${unread ? `<span class="badge">${unread}</span>` : ""}</div>
+      </div>
+      <div class="info"><div class="title">${title}</div><div class="chapter">${chapter}</div></div>
+    </div>`).join("");
+}
+
+function loadDisplayPage() {
+  const p = getDisplayPrefs();
+  setSegmented(displayMode, p.mode);
+  setSegmented(displayCols, p.cols);
+  displayColsSection.classList.toggle("hidden", p.mode === "list");
+  displayBadge.checked = p.badge;
+  displayLastChapter.checked = p.lastChapter;
+  displaySingleLine.checked = p.singleLine;
+  if (!displayPreviewGrid.children.length) renderDisplayPreview();
+}
+
+displayMode.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) updateDisplayPrefs({ mode: b.dataset.value });
+});
+displayCols.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) updateDisplayPrefs({ cols: Number(b.dataset.value) });
+});
+displayBadge.addEventListener("change", () => updateDisplayPrefs({ badge: displayBadge.checked }));
+displayLastChapter.addEventListener("change", () => updateDisplayPrefs({ lastChapter: displayLastChapter.checked }));
+displaySingleLine.addEventListener("change", () => updateDisplayPrefs({ singleLine: displaySingleLine.checked }));
+
+// ----------------------------------------------------------------------
+// Mises à jour : quelles séries ignorer lors d'une vérification groupée (réglage enregistré sur le serveur)
+// ----------------------------------------------------------------------
+const UPDATE_TOGGLES = [
+  [document.getElementById("upd-skip-completed"), "skip_completed"],
+  [document.getElementById("upd-skip-unread"), "skip_unread"],
+  [document.getElementById("upd-skip-neverread"), "skip_never_read"],
+];
+const updMsg = document.getElementById("upd-msg");
+
+async function loadUpdateSettings(keepMessage = false) {
+  try {
+    const s = await (await fetch("/api/settings/updates")).json();
+    UPDATE_TOGGLES.forEach(([el, key]) => (el.checked = Boolean(s[key])));
+    if (!keepMessage) updMsg.textContent = "";
+  } catch (e) {
+    updMsg.textContent = "⚠️ Impossible de lire les réglages.";
+  }
+}
+
+UPDATE_TOGGLES.forEach(([el, key]) =>
+  el.addEventListener("change", async () => {
+    try {
+      const res = await fetch("/api/settings/updates", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: el.checked }),
+      });
+      if (!res.ok) throw new Error();
+      updMsg.textContent = "Enregistré ✓";
+    } catch (e) {
+      updMsg.textContent = "⚠️ Réglage non enregistré.";
+      loadUpdateSettings(true); // l'interrupteur revient à son état réel, le message d'erreur reste visible
+    }
+  }),
+);
+
+// ----------------------------------------------------------------------
+// Stockage : espace utilisé et nettoyage
+// ----------------------------------------------------------------------
+const storageTotal = document.getElementById("storage-total");
+const storageBar = document.getElementById("storage-bar");
+const storageList = document.getElementById("storage-list");
+const storageDisk = document.getElementById("storage-disk");
+const storageMsg = document.getElementById("storage-msg");
+
+async function loadStorage() {
+  let info;
+  try {
+    info = await (await fetch("/api/storage")).json();
+  } catch (e) {
+    storageTotal.textContent = "—";
+    storageMsg.textContent = "⚠️ Impossible de lire le stockage.";
+    return;
+  }
+  const db = info.database;
+  const known = db.bytes + info.backups.bytes + info.logs.bytes;
+  const other = Math.max(0, info.data.bytes - known);
+  const cache = info.page_cache;
+  const parts = [
+    ["seg-db", "Base de données", `${plural(db.series, "série", "séries")} · ${plural(db.chapters, "chapitre", "chapitres")}`, db.bytes],
+    ["seg-backup", "Sauvegardes", plural(info.backups.count, "copie", "copies"), info.backups.bytes],
+    ["seg-logs", "Journaux", plural(info.logs.files, "fichier", "fichiers"), info.logs.bytes],
+    ["seg-cache", "Cache des pages", cache.active ? plural(cache.files, "page", "pages") : "Désactivé", cache.bytes],
+  ];
+  if (other > 0) parts.push(["seg-other", "Autres fichiers", "", other]);
+  const total = parts.reduce((sum, p) => sum + p[3], 0);
+
+  storageTotal.textContent = formatBytes(total);
+  storageBar.innerHTML = parts
+    .filter((p) => p[3] > 0)
+    .map((p) => `<i class="${p[0]}" style="width:${Math.max(1.5, (p[3] / Math.max(1, total)) * 100)}%"></i>`)
+    .join("");
+  storageList.innerHTML = parts
+    .map((p) => `<li><span class="info-dot ${p[0]}"></span><span class="info-name">${escapeHtml(p[1])}<small>${escapeHtml(p[2])}</small></span><span class="info-size">${formatBytes(p[3])}</span></li>`)
+    .join("");
+  storageDisk.textContent = info.disk
+    ? `Disque : ${formatBytes(info.disk.free)} libres sur ${formatBytes(info.disk.total)}.`
+    : "";
+
+  document.getElementById("clear-cache-info").textContent = cache.active
+    ? `${formatBytes(cache.bytes)} · ${plural(cache.files, "page", "pages")}`
+    : "Cache désactivé";
+  document.getElementById("clear-logs-info").textContent = formatBytes(info.logs.bytes);
+  document.getElementById("clear-checks-info").textContent = plural(db.check_runs, "vérification enregistrée", "vérifications enregistrées");
+}
+
+async function storageAction(button, url, confirmText, describe) {
+  if (confirmText && !confirm(confirmText)) return;
+  button.disabled = true;
+  storageMsg.textContent = "…";
+  try {
+    const res = await fetch(url, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Échec");
+    storageMsg.textContent = describe(data);
+  } catch (e) {
+    storageMsg.textContent = "⚠️ " + e.message;
+  } finally {
+    button.disabled = false;
+    loadStorage();
+  }
+}
+
+document.getElementById("clear-cache-btn").addEventListener("click", (e) =>
+  storageAction(e.currentTarget, "/api/storage/clear-page-cache", "", (d) =>
+    d.files ? `Cache vidé : ${plural(d.files, "page supprimée", "pages supprimées")}, ${formatBytes(d.bytes)} libérés.` : "Le cache est déjà vide."));
+document.getElementById("clear-logs-btn").addEventListener("click", (e) =>
+  storageAction(e.currentTarget, "/api/storage/clear-logs", "Effacer les journaux de vérification ?", (d) =>
+    `Journaux effacés : ${formatBytes(d.bytes)} libérés.`));
+document.getElementById("clear-checks-btn").addEventListener("click", (e) =>
+  storageAction(e.currentTarget, "/api/storage/clear-check-history",
+    "Effacer le détail des vérifications passées ? Tes séries, chapitres et ton historique de lecture ne sont pas touchés.", (d) =>
+    `${plural(d.runs, "vérification effacée", "vérifications effacées")}.`));
+document.getElementById("optimize-db-btn").addEventListener("click", (e) =>
+  storageAction(e.currentTarget, "/api/storage/optimize", "", (d) =>
+    `Base optimisée : ${formatBytes(d.before)} → ${formatBytes(d.after)}.`));
+
+document.getElementById("clear-app-cache-btn").addEventListener("click", async () => {
+  if (!confirm("Vider le cache de l'application et la recharger ? Tes données et tes réglages ne sont pas touchés.")) return;
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (e) {}
+  location.reload();
+});
+document.getElementById("reset-prefs-btn").addEventListener("click", () => {
+  if (!confirm("Réinitialiser l'affichage, les filtres et les préférences de cet appareil ?")) return;
+  try {
+    ["stickscans_filters", DISPLAY_KEY, "historyStatsOpen"].forEach((k) => localStorage.removeItem(k));
+  } catch (e) {}
+  location.reload();
+});
+
+// ----------------------------------------------------------------------
+// Sauvegarde et restauration
+// ----------------------------------------------------------------------
+const backupEnabled = document.getElementById("backup-enabled");
+const backupKeep = document.getElementById("backup-keep");
+const backupList = document.getElementById("backup-list");
+const backupMsg = document.getElementById("backup-msg");
+const backupNowBtn = document.getElementById("backup-now-btn");
+
+function renderBackups(data) {
+  backupEnabled.checked = data.settings.enabled;
+  if (![...backupKeep.options].some((o) => o.value === String(data.settings.keep))) {
+    const opt = document.createElement("option");
+    opt.value = String(data.settings.keep);
+    opt.textContent = String(data.settings.keep);
+    backupKeep.appendChild(opt);
+  }
+  backupKeep.value = String(data.settings.keep);
+  backupKeep.disabled = !data.settings.enabled;
+  if (data.backups.length === 0) {
+    backupList.innerHTML = '<li class="backup-empty">Aucune sauvegarde pour l\'instant.</li>';
+    return;
+  }
+  backupList.innerHTML = data.backups.map((b) => {
+    const when = new Date(b.modified).toLocaleString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const name = escapeHtml(b.name);
+    return `<li class="backup-row" data-name="${name}">
+      <div class="backup-info">
+        <div class="backup-head"><strong>${escapeHtml(b.label)}</strong><em>${formatBytes(b.size)}</em></div>
+        <span>${escapeHtml(when)}</span>
+      </div>
+      <div class="backup-actions">
+        <button type="button" class="mini-btn" data-act="restore">Restaurer</button>
+        <a class="mini-btn" href="/api/backups/${encodeURIComponent(b.name)}/download" download title="Télécharger">⬇</a>
+        <button type="button" class="mini-btn danger-btn" data-act="delete" title="Supprimer">🗑</button>
+      </div>
+    </li>`;
+  }).join("");
+}
+
+async function loadBackups() {
+  try {
+    renderBackups(await (await fetch("/api/backups")).json());
+  } catch (e) {
+    backupMsg.textContent = "⚠️ Impossible de lire les sauvegardes.";
+  }
+}
+
+async function saveBackupSettings(patch) {
+  try {
+    const res = await fetch("/api/settings/backups", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error();
+    backupMsg.textContent = "Enregistré ✓";
+  } catch (e) {
+    backupMsg.textContent = "⚠️ Réglage non enregistré.";
+  }
+  loadBackups();
+}
+backupEnabled.addEventListener("change", () => saveBackupSettings({ enabled: backupEnabled.checked }));
+backupKeep.addEventListener("change", () => saveBackupSettings({ keep: Number(backupKeep.value) }));
+
+backupNowBtn.addEventListener("click", async () => {
+  backupNowBtn.disabled = true;
+  backupMsg.textContent = "Sauvegarde en cours…";
+  try {
+    const res = await fetch("/api/backups", { method: "POST" });
+    if (!res.ok) throw new Error();
+    renderBackups(await res.json());
+    backupMsg.textContent = "Sauvegarde créée ✓";
+  } catch (e) {
+    backupMsg.textContent = "⚠️ La sauvegarde a échoué.";
+  } finally {
+    backupNowBtn.disabled = false;
+  }
+});
+
+backupList.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-act]");
+  if (!btn) return;
+  const name = btn.closest(".backup-row").dataset.name;
+  const url = `/api/backups/${encodeURIComponent(name)}`;
+  if (btn.dataset.act === "delete") {
+    if (!confirm("Supprimer cette sauvegarde ?")) return;
+    try {
+      const res = await fetch(url, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      renderBackups(await res.json());
+      backupMsg.textContent = "Sauvegarde supprimée.";
+    } catch (err) {
+      backupMsg.textContent = "⚠️ Suppression impossible.";
+    }
+  } else if (btn.dataset.act === "restore") {
+    if (!confirm("Restaurer cette sauvegarde ? Toutes tes données actuelles seront remplacées. Une copie de sécurité de l'état actuel est faite avant.")) return;
+    backupMsg.textContent = "Restauration…";
+    try {
+      const res = await fetch(`${url}/restore`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Restauration impossible");
+      alert("Sauvegarde restaurée. L'application va se recharger.");
+      location.reload();
+    } catch (err) {
+      backupMsg.textContent = "⚠️ " + err.message;
+    }
+  }
+});
+
+applyDisplayPrefs();
 
 syncAnilist();

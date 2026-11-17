@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field
 from . import anilist, auth, database
 from . import scraper as scraper_module
 from .parse_series import number_to_float
+from . import backup as backup_files
+from . import storage
 from .backup import replace_database, run_backup
 from .fetcher import FetchError
 from .scraper import normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
@@ -33,6 +35,21 @@ STATIC_DIR = Path(__file__).parent.parent / "static"
 scheduler = BackgroundScheduler()
 
 
+def _backup_settings() -> dict:
+    """Sauvegarde automatique : activée par défaut, 7 copies quotidiennes gardées (1 à 30)."""
+    try:
+        keep = int(database.get_setting("backup_keep") or 7)
+    except ValueError:
+        keep = 7
+    return {"enabled": database.get_setting("backup_enabled") != "0", "keep": min(30, max(1, keep))}
+
+
+def scheduled_backup(overwrite: bool = True):
+    cfg = _backup_settings()
+    if cfg["enabled"]:
+        run_backup(overwrite=overwrite, keep=cfg["keep"])
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if auth.AUTH_REQUIRED and not auth.is_enabled():
@@ -43,7 +60,7 @@ async def lifespan(app: FastAPI):
         logger.info("Authentification activée (utilisateur : %s)", auth.AUTH_USERNAME)
     else:
         logger.warning("AUTH_PASSWORD non défini : l'application est accessible SANS authentification")
-    run_backup(overwrite=False)  # au démarrage : on garde la copie du jour si elle existe déjà
+    scheduled_backup(overwrite=False)  # au démarrage : on garde la copie du jour si elle existe déjà
     # CHECK_INTERVAL_HOURS : fréquence des vérifications (défaut : toutes les heures).
     # CHECK_OFFSET_MINUTES : si défini, les vérifications tombent à cette minute pile de l'heure
     # (ex. 30 => xx:30), pratique pour décaler deux instances qui interrogent le même site.
@@ -54,7 +71,7 @@ async def lifespan(app: FastAPI):
     else:
         check_trigger = IntervalTrigger(hours=interval_hours)
     scheduler.add_job(check_all_series, check_trigger, id="check_all_series")
-    scheduler.add_job(run_backup, CronTrigger(hour=3, minute=0), id="daily_backup")
+    scheduler.add_job(scheduled_backup, CronTrigger(hour=3, minute=0), id="daily_backup")
     # ANILIST_SYNC_MINUTES : fréquence de la copie de l'état AniList dans l'appli (défaut 15 ; 0 = désactivée).
     sync_minutes = int(os.environ.get("ANILIST_SYNC_MINUTES", "15") or 0)
     if sync_minutes > 0:
@@ -474,6 +491,116 @@ def remove_history_entries(payload: HistoryRemoveRequest):
 def clear_history():
     database.clear_reading_history()
     return {"ok": True}
+
+
+# ----- Réglages : mises à jour, stockage, sauvegardes -----
+
+class UpdateSettingsRequest(BaseModel):
+    skip_completed: bool | None = None
+    skip_unread: bool | None = None
+    skip_never_read: bool | None = None
+
+
+class BackupSettingsRequest(BaseModel):
+    enabled: bool | None = None
+    keep: int | None = Field(default=None, ge=1, le=30)
+
+
+def _refuse_while_checking():
+    if get_progress()["is_running"]:
+        raise HTTPException(409, "Une vérification est en cours : réessaie quand elle est terminée.")
+
+
+@app.get("/api/settings/updates")
+def get_updates_settings():
+    return database.get_update_settings()
+
+
+@app.put("/api/settings/updates")
+def put_updates_settings(payload: UpdateSettingsRequest):
+    return database.set_update_settings(payload.model_dump())
+
+
+@app.get("/api/storage")
+def get_storage():
+    return storage.get_storage_info()
+
+
+@app.post("/api/storage/clear-page-cache")
+def clear_page_cache():
+    return storage.clear_page_cache()
+
+
+@app.post("/api/storage/clear-logs")
+def clear_logs():
+    return storage.clear_logs()
+
+
+@app.post("/api/storage/clear-check-history")
+def clear_check_history():
+    _refuse_while_checking()
+    return database.clear_check_history()
+
+
+@app.post("/api/storage/optimize")
+def optimize_storage():
+    _refuse_while_checking()
+    return storage.optimize_database()
+
+
+@app.get("/api/backups")
+def list_backups():
+    return {"settings": _backup_settings(), "backups": backup_files.list_backups()}
+
+
+@app.put("/api/settings/backups")
+def put_backup_settings(payload: BackupSettingsRequest):
+    if payload.enabled is not None:
+        database.set_setting("backup_enabled", "1" if payload.enabled else "0")
+    if payload.keep is not None:
+        database.set_setting("backup_keep", str(payload.keep))
+    return _backup_settings()
+
+
+@app.post("/api/backups")
+def create_backup():
+    backup_files.create_manual_backup()
+    return {"settings": _backup_settings(), "backups": backup_files.list_backups()}
+
+
+@app.get("/api/backups/{name}/download")
+def download_backup(name: str):
+    try:
+        path = backup_files.backup_path(name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except FileNotFoundError:
+        raise HTTPException(404, "Sauvegarde introuvable")
+    return FileResponse(path, filename=name, media_type="application/octet-stream")
+
+
+@app.delete("/api/backups/{name}")
+def delete_backup(name: str):
+    try:
+        backup_files.delete_backup(name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except FileNotFoundError:
+        raise HTTPException(404, "Sauvegarde introuvable")
+    return {"settings": _backup_settings(), "backups": backup_files.list_backups()}
+
+
+@app.post("/api/backups/{name}/restore")
+def restore_backup(name: str):
+    _refuse_while_checking()
+    try:
+        safe = backup_files.restore_backup(name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except FileNotFoundError:
+        raise HTTPException(404, "Sauvegarde introuvable")
+    database.init_db()  # met le schéma à niveau si la sauvegarde vient d'une version plus ancienne
+    return {"status": "ok", "backup": safe.name if safe else None}
 
 
 @app.get("/api/stats")

@@ -117,5 +117,17 @@ partagent les pages récupérées et sollicitent moins le site. Décale leurs v�
 
 ## Sauvegardes
 
-La base est sauvegardée chaque nuit à 3 h dans `data/backups/` (7 copies). Ces copies sont sur le même disque : fais en
-plus une copie de `/opt/stickscans/*/data/` ailleurs de temps en temps.
+La base est sauvegardée chaque nuit à 3 h (et au démarrage) dans `data/backups/`. Tout se règle depuis
+**Réglages > Sauvegarde et restauration** : sauvegarde automatique activée ou non, nombre de copies gardées (7 par défaut),
+sauvegarde manuelle, téléchargement, **restauration** d'une copie (l'état d'avant est gardé dans une copie
+« avant restauration »), export et import de la base.
+
+Ces copies sont sur le même disque : fais en plus une copie de `/opt/stickscans/*/data/` ailleurs de temps en temps.
+
+## Réglages dans l'appli
+
+- **Affichage** : grille ou liste, couvertures par ligne, informations affichées (propre à chaque appareil).
+- **Catégories** : créer, renommer, supprimer.
+- **Mises à jour** : ignorer les séries terminées, avec des chapitres non lus, ou jamais lues (vérifications groupées).
+- **Stockage** : espace utilisé, vider le cache des pages, effacer les journaux, optimiser la base.
+- **Sauvegarde et restauration**, **AniList**, **Aperçu de lecture** et **Vérifications**.

@@ -949,3 +949,51 @@ def get_series_ids_for_chapters(chapter_ids: list[int]) -> set:
             f"SELECT DISTINCT series_id FROM chapters WHERE id IN ({placeholders})", chapter_ids
         ).fetchall()
         return {r["series_id"] for r in rows}
+
+
+# --- Réglages des mises à jour (quelles séries une vérification groupée doit ignorer) ---
+
+UPDATE_SETTING_DEFAULTS = {"skip_completed": True, "skip_unread": False, "skip_never_read": False}
+
+
+def get_update_settings() -> dict:
+    values = {}
+    for key, default in UPDATE_SETTING_DEFAULTS.items():
+        raw = get_setting(f"update_{key}")
+        values[key] = default if raw is None else raw == "1"
+    return values
+
+
+def set_update_settings(values: dict) -> dict:
+    """Enregistre les réglages fournis (les autres restent inchangés) et renvoie l'ensemble."""
+    for key in UPDATE_SETTING_DEFAULTS:
+        if values.get(key) is not None:
+            set_setting(f"update_{key}", "1" if values[key] else "0")
+    return get_update_settings()
+
+
+# --- Stockage ---
+
+def get_storage_counts() -> dict:
+    with get_conn() as conn:
+        def one(query: str) -> int:
+            return conn.execute(query).fetchone()[0]
+
+        return {
+            "series": one("SELECT COUNT(*) FROM series"),
+            "chapters": one("SELECT COUNT(*) FROM chapters"),
+            "read_chapters": one("SELECT COUNT(*) FROM chapters WHERE is_read = 1"),
+            "history_entries": one("SELECT COUNT(*) FROM chapters WHERE read_at IS NOT NULL"),
+            "categories": one("SELECT COUNT(*) FROM categories"),
+            "check_runs": one("SELECT COUNT(*) FROM check_runs"),
+            "check_items": one("SELECT COUNT(*) FROM check_run_items"),
+        }
+
+
+def clear_check_history() -> dict:
+    """Supprime le détail des vérifications passées (page « Vérifications »). Les séries et les chapitres ne sont pas touchés."""
+    with get_conn() as conn:
+        items = conn.execute("SELECT COUNT(*) FROM check_run_items").fetchone()[0]
+        conn.execute("DELETE FROM check_run_items")
+        runs = conn.execute("DELETE FROM check_runs").rowcount
+    return {"runs": runs, "items": items}

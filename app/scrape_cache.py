@@ -77,3 +77,39 @@ def purge_old() -> None:
                 path.unlink()
         except OSError:
             pass
+
+
+def stats() -> dict:
+    """État du cache des pages : actif ou non, dossier, nombre de fichiers et taille."""
+    files = size = 0
+    if CACHE_DIR is not None and CACHE_DIR.exists():
+        for path in CACHE_DIR.glob("*.html.gz"):
+            try:
+                size += path.stat().st_size
+                files += 1
+            except OSError:
+                pass
+    return {
+        "active": is_active(),
+        "mode": MODE,
+        "dir": str(CACHE_DIR) if CACHE_DIR is not None else None,
+        "files": files,
+        "bytes": size,
+        "max_age_minutes": MAX_AGE_SECONDS // 60,
+    }
+
+
+def clear() -> tuple[int, int]:
+    """Supprime toutes les pages en cache (même celles que l'autre instance pourrait réutiliser : elles seront
+    simplement redemandées au site). Renvoie (fichiers supprimés, octets libérés)."""
+    files = freed = 0
+    if CACHE_DIR is not None and CACHE_DIR.exists():
+        for path in list(CACHE_DIR.glob("*.html.gz")) + list(CACHE_DIR.glob("*.tmp")):
+            try:
+                size = path.stat().st_size
+                path.unlink()
+                files += 1
+                freed += size
+            except OSError:
+                pass
+    return files, freed
