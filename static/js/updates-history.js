@@ -1,6 +1,62 @@
 // Onglets Nouveautés et Historique (statistiques de lecture comprises).
 // Fichier 5/15 : chargé dans l'ordre par index.html ; tous partagent la même portée globale.
 
+// --- Listes chargées par pages (« voir plus ») ---
+// Les éléments déjà chargés sont gardés : en revenant sur l'écran (après une fiche, par exemple), on recharge le même
+// nombre d'éléments, ce qui permet de retrouver la position dans la liste. La page suivante s'ajoute toute seule
+// quand on approche du bas ; le bouton « Voir plus » reste là si le chargement automatique ne se déclenche pas.
+function makePager(url, pageSize) {
+  return { url, pageSize, items: [], hasMore: false, loading: false };
+}
+
+async function pagerReload(pager) {
+  const want = Math.max(pager.pageSize, pager.items.length);
+  const items = await (await fetch(`${pager.url}?limit=${want}&offset=0`)).json();
+  pager.items = items;
+  pager.hasMore = items.length === want;
+}
+
+async function pagerMore(pager) {
+  if (pager.loading || !pager.hasMore) return false;
+  pager.loading = true;
+  try {
+    const items = await (await fetch(`${pager.url}?limit=${pager.pageSize}&offset=${pager.items.length}`)).json();
+    pager.items = pager.items.concat(items);
+    pager.hasMore = items.length === pager.pageSize;
+    return true;
+  } finally {
+    pager.loading = false;
+  }
+}
+
+function appendMoreButton(container, pager, rerender) {
+  if (!pager.hasMore) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "more-btn";
+  btn.textContent = "Voir plus";
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "Chargement…";
+    try {
+      if (await pagerMore(pager)) rerender();
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "Voir plus";
+    }
+  });
+  container.appendChild(btn);
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && !btn.disabled) {
+        observer.disconnect();
+        btn.click();
+      }
+    }, { rootMargin: "400px" });
+    observer.observe(btn);
+  }
+}
+
 function renderGroupedList(container, items, dateField, labelFn, showTime = false) {
   container.innerHTML = "";
   if (items.length === 0) {
@@ -35,15 +91,22 @@ async function loadUpdates() {
     banner.textContent = text ? "⏸ " + text : "";
     banner.classList.toggle("hidden", !text);
   }).catch(() => {});
-  const res = await fetch("/api/updates");
-  const items = await res.json();
+  await pagerReload(updatesPager);
+  renderUpdates();
+}
+
+const updatesPager = makePager("/api/updates", 100);
+
+function renderUpdates() {
+  const container = document.getElementById("updates-list");
   renderGroupedList(
-    document.getElementById("updates-list"),
-    items,
+    container,
+    updatesPager.items,
     "discovered_at",
     (item) => `Chapitre ${escapeHtml(item.number)} de ${escapeHtml(item.series_title)}`,
     true
   );
+  appendMoreButton(container, updatesPager, renderUpdates);
 }
 
 // Regroupe les lectures d'une même série faites à moins de 30 min d'écart (une "session").
@@ -112,9 +175,8 @@ function renderHistoryList(container, items) {
 
 async function loadHistory() {
   const tzOffset = -new Date().getTimezoneOffset(); // minutes d'avance sur UTC (Paris été : 120)
-  const [statsRes, itemsRes] = await Promise.all([fetch(`/api/stats?tz_offset=${tzOffset}`), fetch("/api/history")]);
+  const [statsRes] = await Promise.all([fetch(`/api/stats?tz_offset=${tzOffset}`), pagerReload(historyPager)]);
   const stats = await statsRes.json();
-  const items = await itemsRes.json();
 
   // Par défaut : seul le graphique des 7 jours est visible. Les autres stats s'ouvrent d'un appui.
   let statsOpen = false;
@@ -140,7 +202,17 @@ async function loadHistory() {
     try { localStorage.setItem("historyStatsOpen", nowHidden ? "0" : "1"); } catch (e) {}
   });
 
-  renderHistoryList(document.getElementById("history-list"), items);
+  renderHistory();
+}
+
+const historyPager = makePager("/api/history", 200);
+
+// Toute la liste est redessinée à chaque page ajoutée : une session de lecture coupée entre deux pages est ainsi
+// regroupée correctement (« Chapitres 10 à 15 »), au lieu d'apparaître en deux morceaux.
+function renderHistory() {
+  const container = document.getElementById("history-list");
+  renderHistoryList(container, historyPager.items);
+  appendMoreButton(container, historyPager, renderHistory);
 }
 
 function renderWeekChart(days, toggleHtml = "") {

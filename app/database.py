@@ -691,7 +691,7 @@ def mark_all_unread(series_id: int) -> int:
 
 # --- Mises à jour / Historique ---
 
-def get_recent_updates(limit: int = 100) -> list[dict]:
+def get_recent_updates(limit: int = 100, offset: int = 0) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """
@@ -700,15 +700,15 @@ def get_recent_updates(limit: int = 100) -> list[dict]:
             FROM chapters c
             JOIN series s ON s.id = c.series_id
             WHERE c.is_initial_fetch = 0
-            ORDER BY c.discovered_at DESC
-            LIMIT ?
+            ORDER BY c.discovered_at DESC, c.number_float DESC, c.id DESC
+            LIMIT ? OFFSET ?
             """,
-            (limit,),
+            (limit, offset),
         ).fetchall()
         return [dict(r) for r in rows]
 
 
-def get_reading_history(limit: int = 200) -> list[dict]:
+def get_reading_history(limit: int = 200, offset: int = 0) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """
@@ -717,10 +717,10 @@ def get_reading_history(limit: int = 200) -> list[dict]:
             FROM chapters c
             JOIN series s ON s.id = c.series_id
             WHERE c.read_at IS NOT NULL
-            ORDER BY c.read_at DESC, c.number_float DESC
-            LIMIT ?
+            ORDER BY c.read_at DESC, c.number_float DESC, c.id DESC
+            LIMIT ? OFFSET ?
             """,
-            (limit,),
+            (limit, offset),
         ).fetchall()
         return [dict(r) for r in rows]
 

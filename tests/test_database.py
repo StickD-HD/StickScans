@@ -157,3 +157,17 @@ def test_plateforme_et_popularite_enregistrees(db):
     db.update_series_result(sid, make_parsed([site_chapter(1)], platform="Webtoons", popularity=250, team="Poséidon Scans"))
     s = db.get_series_by_id(sid)
     assert (s["platform"], s["popularity"], s["team"]) == ("Webtoons", 250, "Poséidon Scans")
+
+
+def test_pages_sans_trou_ni_doublon(db):
+    """Beaucoup d'entrées à la même seconde (lecture de plusieurs chapitres d'un coup) : les pages s'enchaînent sans
+    sauter ni répéter d'entrée, grâce au tri stable."""
+    sid = db.insert_series("https://www.scan-manga.com/longue.html", make_parsed([site_chapter(n) for n in range(1, 251)]))
+    with db.get_conn() as conn:
+        conn.execute("UPDATE chapters SET read_at = '2026-11-21 10:00:00', is_initial_fetch = 0, "
+                     "discovered_at = '2026-11-20 08:00:00' WHERE series_id = ?", (sid,))
+    for fetch, total in ((db.get_reading_history, 250), (db.get_recent_updates, 250)):
+        seen = []
+        for offset in range(0, 300, 70):
+            seen += [c["chapter_id"] for c in fetch(limit=70, offset=offset)]
+        assert len(seen) == total and len(set(seen)) == total

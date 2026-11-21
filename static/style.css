@@ -734,3 +734,5 @@ a.mini-btn {
 .q-skip { color: var(--muted); }
 .fold-btn { margin-top: 8px; width: 100%; background: transparent; color: var(--accent2); font-size: 0.8rem; }
 .checks-journal #checks-list { padding: 0; }
+/* « Voir plus » en bas de l'Historique et des Nouveautés */
+.more-btn { display: block; width: 100%; margin: 12px 0 4px; background: transparent; color: var(--accent2); font-size: 0.85rem; }

@@ -576,14 +576,21 @@ def bulk_toggle_read(payload: BulkReadRequest, background_tasks: BackgroundTasks
     return {"ok": True}
 
 
+# Nouveautés et historique se chargent par pages (« voir plus ») : limit = taille de la page, offset = déjà chargés.
+def _page(limit: int, offset: int) -> tuple[int, int]:
+    return min(max(limit, 1), 1000), max(offset, 0)
+
+
 @app.get("/api/updates")
-def list_updates(limit: int = 100):
-    return database.get_recent_updates(limit=limit)
+def list_updates(limit: int = 100, offset: int = 0):
+    limit, offset = _page(limit, offset)
+    return database.get_recent_updates(limit=limit, offset=offset)
 
 
 @app.get("/api/history")
-def list_history(limit: int = 200):
-    return database.get_reading_history(limit=limit)
+def list_history(limit: int = 200, offset: int = 0):
+    limit, offset = _page(limit, offset)
+    return database.get_reading_history(limit=limit, offset=offset)
 
 
 @app.post("/api/history/remove")
