@@ -117,6 +117,8 @@ NEW_SERIES_COLUMNS = {
     "anilist_end_date": "TEXT",
     "anilist_cover_url": "TEXT",
     "anilist_notes": "TEXT",
+    "next_check_at": "TEXT",   # prochaine vérification automatique (UTC) ; vide = dès que possible
+    "check_reason": "TEXT",    # raison de cet intervalle (voir schedule.REASONS)
 }
 
 NEW_CHAPTERS_COLUMNS = {
@@ -945,6 +947,47 @@ def get_series_ids_for_chapters(chapter_ids: list[int]) -> set:
             f"SELECT DISTINCT series_id FROM chapters WHERE id IN ({placeholders})", chapter_ids
         ).fetchall()
         return {r["series_id"] for r in rows}
+
+
+# --- Planification des vérifications (voir schedule.py) ---
+
+def get_discovery_times(series_id: int, limit: int = 60) -> list[datetime]:
+    """Dates (UTC, sans fuseau) des chapitres découverts après l'ajout de la série, de la plus récente à la plus ancienne."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT discovered_at FROM chapters WHERE series_id = ? AND is_initial_fetch = 0 "
+            "ORDER BY discovered_at DESC LIMIT ?",
+            (series_id, limit),
+        ).fetchall()
+    return [parse_utc(r["discovered_at"]) for r in rows if r["discovered_at"]]
+
+
+def set_next_check(series_id: int, when: datetime | None, reason: str | None):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE series SET next_check_at = ?, check_reason = ? WHERE id = ?",
+            (format_utc(when) if when else None, reason, series_id),
+        )
+
+
+def get_due_series(now: datetime) -> list[dict]:
+    """Séries dont la vérification est due, de la plus en retard à la moins en retard (jamais planifiées d'abord)."""
+    limit = format_utc(now)
+    due = [s for s in get_all_series() if not s.get("next_check_at") or s["next_check_at"] <= limit]
+    return sorted(due, key=lambda s: s.get("next_check_at") or "")
+
+
+def auto_checks_enabled() -> bool:
+    return get_setting("auto_checks_enabled") != "0"
+
+
+def parse_utc(text: str) -> datetime:
+    """'2026-11-21 12:00:00' (format SQLite, UTC) -> datetime sans fuseau."""
+    return datetime.strptime(text[:19], "%Y-%m-%d %H:%M:%S")
+
+
+def format_utc(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%d %H:%M:%S")
 
 
 # --- Réglages des mises à jour (quelles séries une vérification groupée doit ignorer) ---

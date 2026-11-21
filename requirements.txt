@@ -1,6 +1,11 @@
-fastapi>=0.115
-uvicorn[standard]>=0.32
-apscheduler>=3.10
-requests>=2.32
-beautifulsoup4>=4.12
-python-multipart>=0.0.9
+# Versions figées : celles qui tournent en production (pip freeze du 21/11/2026).
+# Pour monter de version : changer ici, tester (python -m pytest), puis déployer.
+fastapi==0.162.7
+starlette==1.10.0
+pydantic==2.14.3
+uvicorn[standard]==0.54.0
+apscheduler==3.11.3
+requests==2.32.3
+urllib3==2.3.0
+beautifulsoup4==4.15.0
+python-multipart==0.0.33

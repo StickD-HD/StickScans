@@ -9,7 +9,7 @@ récupérées normalement.
 Réglages (variables d'environnement) :
 - SCRAPE_CACHE_MODE            : "off" (défaut), "write" (principale), "read" (secondaire) ou "both" (les deux instances lisent ET écrivent).
 - SCRAPE_CACHE_DIR             : dossier de la copie (le même pour les deux instances).
-- SCRAPE_CACHE_MAX_AGE_MINUTES : âge maximal d'une copie réutilisable (défaut : 40).
+- SCRAPE_CACHE_MAX_AGE_MINUTES : âge maximal d'une copie réutilisable (défaut : 90).
 """
 import gzip
 import hashlib
@@ -25,7 +25,7 @@ CACHE_DIR = Path(os.environ["SCRAPE_CACHE_DIR"]) if os.environ.get("SCRAPE_CACHE
 MODE = os.environ.get("SCRAPE_CACHE_MODE", "").strip().lower() or ("both" if CACHE_DIR else "off")
 if MODE not in ("off", "read", "write", "both"):
     MODE = "off"
-MAX_AGE_SECONDS = max(1, int(os.environ.get("SCRAPE_CACHE_MAX_AGE_MINUTES", "40") or 40)) * 60
+MAX_AGE_SECONDS = max(1, int(os.environ.get("SCRAPE_CACHE_MAX_AGE_MINUTES", "90") or 90)) * 60
 ORPHAN_DAYS = 3  # une copie plus ancienne n'est plus utile (série supprimée, par exemple)
 
 

@@ -118,6 +118,14 @@ const detailGenres = document.getElementById("detail-genres");
 const detailAuthor = document.getElementById("detail-author");
 const detailEditor = document.getElementById("detail-editor");
 const detailTeam = document.getElementById("detail-team");
+const detailNextCheck = document.getElementById("detail-next-check");
+const CHECK_REASON_LABELS = {
+  between: "entre deux sorties",
+  window: "sortie attendue",
+  late: "sortie en retard",
+  dormant: "série probablement en pause",
+  error: "après une erreur",
+};
 const detailSourceLink = document.getElementById("detail-source-link");
 const anilistActionBtn = document.getElementById("anilist-action-btn");
 const libraryBtn = document.getElementById("library-btn");
@@ -224,6 +232,34 @@ function formatTimeLabel(dateStr) {
   if (diffDays <= 1) return `à ${time}`; // le titre de section dit déjà "Aujourd'hui" ou "Hier"
   if (diffDays < 7) return `${date.toLocaleDateString("fr-FR", { weekday: "long" })} à ${time}`;
   return `${date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} à ${time}`;
+}
+
+// Date à venir (UTC, format SQLite) : « aujourd'hui à 15h20 », « demain à 3h05 », « mardi à 9h00 », « 12 déc. à 9h00 ».
+function formatFuture(dateStr) {
+  const date = new Date(dateStr.replace(" ", "T") + "Z");
+  const time = `${date.getHours()}h${String(date.getMinutes()).padStart(2, "0")}`;
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startOfDay(date) - startOfDay(new Date())) / 86400000);
+  if (date <= new Date()) return "dès que possible";
+  if (diffDays === 0) return `aujourd'hui à ${time}`;
+  if (diffDays === 1) return `demain à ${time}`;
+  if (diffDays < 7) return `${date.toLocaleDateString("fr-FR", { weekday: "long" })} à ${time}`;
+  return `${date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} à ${time}`;
+}
+
+function formatWait(seconds) {
+  const m = Math.ceil(Math.max(0, seconds) / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h} h ${String(m % 60).padStart(2, "0")}` : `${h} h`;
+}
+
+// Phrase d'état du site, ou "" si les requêtes peuvent partir normalement.
+function sitePauseText(st) {
+  if (st.blocked) return `Le site a refusé les requêtes : pause encore ${formatWait(st.remaining_seconds)} (refus n° ${st.strikes}). Aucune requête n'est envoyée pendant ce temps.`;
+  if (st.quota_reached) return `Limite de ${st.daily_limit} requêtes par jour atteinte : les vérifications reprennent demain.`;
+  if (!st.auto_enabled) return "Vérifications automatiques désactivées (Réglages › Mises à jour).";
+  return "";
 }
 
 function goToTopView(viewId) {
@@ -340,6 +376,12 @@ function renderGroupedList(container, items, dateField, labelFn, showTime = fals
 }
 
 async function loadUpdates() {
+  fetch("/api/site-status").then((r) => r.json()).then((st) => {
+    const banner = document.getElementById("updates-pause-banner");
+    const text = sitePauseText(st);
+    banner.textContent = text ? "⏸ " + text : "";
+    banner.classList.toggle("hidden", !text);
+  }).catch(() => {});
   const res = await fetch("/api/updates");
   const items = await res.json();
   renderGroupedList(
@@ -973,6 +1015,9 @@ async function loadSeriesDetail() {
   detailAuthor.textContent = s.author ? "Auteur : " + s.author : "";
   detailEditor.textContent = s.editor ? "Éditeur : " + s.editor : "";
   detailTeam.textContent = s.team ? "Team trad : " + s.team : "";
+  detailNextCheck.textContent = s.next_check_at
+    ? `Prochaine vérification : ${formatFuture(s.next_check_at)}${CHECK_REASON_LABELS[s.check_reason] ? " (" + CHECK_REASON_LABELS[s.check_reason] + ")" : ""}`
+    : "Prochaine vérification : dès que possible";
   detailSourceLink.href = s.url;
   detailSourceBtn.href = s.url;
   renderAnilistSection(s);
@@ -1161,9 +1206,11 @@ recheckSeriesBtn.addEventListener("click", async () => {
   recheckSeriesBtn.disabled = true;
   detailMenuBtn.classList.add("busy");
   try {
-    await fetch(`/api/series/${currentSeriesId}/recheck`, { method: "POST" });
+    const res = await fetch(`/api/series/${currentSeriesId}/recheck`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
     await loadSeriesDetail();
     await loadChapters();
+    if (data.check_error) alert("Vérification impossible : " + data.check_error);
   } finally {
     recheckSeriesBtn.disabled = false;
     detailMenuBtn.classList.remove("busy");
@@ -1413,7 +1460,12 @@ anilistUnlinkBtn.addEventListener("click", async () => {
 });
 
 async function startRefreshAll() {
-  await fetch("/api/series/refresh-all", { method: "POST" });
+  const res = await fetch("/api/series/refresh-all", { method: "POST" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(typeof data.detail === "string" ? data.detail : "Actualisation impossible pour l'instant.");
+    return;
+  }
   pollRefreshStatus();
 }
 refreshAllBtn.addEventListener("click", startRefreshAll);
@@ -1991,6 +2043,7 @@ displaySingleLine.addEventListener("change", () => updateDisplayPrefs({ singleLi
 // Mises à jour : quelles séries ignorer lors d'une vérification groupée (réglage enregistré sur le serveur)
 // ----------------------------------------------------------------------
 const UPDATE_TOGGLES = [
+  [document.getElementById("upd-auto-enabled"), "auto_enabled"],
   [document.getElementById("upd-skip-completed"), "skip_completed"],
   [document.getElementById("upd-skip-unread"), "skip_unread"],
   [document.getElementById("upd-skip-neverread"), "skip_never_read"],
@@ -2002,6 +2055,7 @@ async function loadUpdateSettings(keepMessage = false) {
     const s = await (await fetch("/api/settings/updates")).json();
     UPDATE_TOGGLES.forEach(([el, key]) => (el.checked = Boolean(s[key])));
     if (!keepMessage) updMsg.textContent = "";
+    loadSiteStatus();
   } catch (e) {
     updMsg.textContent = "⚠️ Impossible de lire les réglages.";
   }
@@ -2017,12 +2071,48 @@ UPDATE_TOGGLES.forEach(([el, key]) =>
       });
       if (!res.ok) throw new Error();
       updMsg.textContent = "Enregistré ✓";
+      loadSiteStatus();
     } catch (e) {
       updMsg.textContent = "⚠️ Réglage non enregistré.";
       loadUpdateSettings(true); // l'interrupteur revient à son état réel, le message d'erreur reste visible
     }
   }),
 );
+
+const siteStatusBox = document.getElementById("site-status-box");
+const siteClearPauseBtn = document.getElementById("site-clear-pause-btn");
+
+function renderSiteStatus(st) {
+  const lines = [];
+  const pause = sitePauseText(st);
+  lines.push(pause ? `<strong class="warn-text">⏸ ${escapeHtml(pause)}</strong>` : "<strong>✓ Requêtes autorisées</strong>");
+  lines.push(`${st.requests_today} requête${st.requests_today > 1 ? "s" : ""} aujourd'hui sur ${st.daily_limit} maximum${st.shared ? ", toutes instances du serveur confondues" : ""}.`);
+  if (st.due_now) lines.push(`${st.due_now} série${st.due_now > 1 ? "s" : ""} à vérifier dès que possible.`);
+  else if (st.next_check_at) lines.push(`Prochaine vérification : ${formatFuture(st.next_check_at)}.`);
+  if (st.last_block_at) {
+    const when = new Date(st.last_block_at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    lines.push(`Dernier refus du site : ${escapeHtml(when)} (${escapeHtml(st.last_block_reason || "?")}).`);
+  }
+  siteStatusBox.innerHTML = lines.map((l) => `<p>${l}</p>`).join("");
+  siteClearPauseBtn.classList.toggle("hidden", !st.blocked);
+}
+
+async function loadSiteStatus() {
+  try {
+    renderSiteStatus(await (await fetch("/api/site-status")).json());
+  } catch (e) {
+    siteStatusBox.textContent = "⚠️ État du site indisponible.";
+  }
+}
+
+siteClearPauseBtn.addEventListener("click", async () => {
+  if (!confirm("Lever la pause maintenant ? À faire seulement si le site t'a débloqué : un nouveau refus entraînerait une pause plus longue.")) return;
+  try {
+    renderSiteStatus(await (await fetch("/api/site-status/clear-pause", { method: "POST" })).json());
+  } catch (e) {
+    siteStatusBox.textContent = "⚠️ Impossible de lever la pause.";
+  }
+});
 
 // ----------------------------------------------------------------------
 // Stockage : espace utilisé et nettoyage

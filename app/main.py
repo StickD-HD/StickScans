@@ -25,7 +25,9 @@ from . import backup as backup_files
 from . import storage
 from .backup import replace_database, run_backup
 from .fetcher import FetchError
-from .scraper import normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress
+from . import site_guard
+from .scraper import (normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress,
+                      plan_next, run_due_checks, site_pause_message)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("manhwa-tracker")
@@ -33,6 +35,12 @@ logger = logging.getLogger("manhwa-tracker")
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
 scheduler = BackgroundScheduler()
+
+DUE_CHECK_EVERY_MINUTES = 10
+LEGACY_CHECK_SETTINGS = (
+    "CHECK_INTERVAL_HOURS", "CHECK_OFFSET_MINUTES", "CHECK_MIN_DELAY_SECONDS", "CHECK_MAX_DELAY_SECONDS",
+    "FETCH_BLOCK_COOLDOWN_MINUTES", "FETCH_BACKEND",
+)
 
 
 def _backup_settings() -> dict:
@@ -61,16 +69,16 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("AUTH_PASSWORD non défini : l'application est accessible SANS authentification")
     scheduled_backup(overwrite=False)  # au démarrage : on garde la copie du jour si elle existe déjà
-    # CHECK_INTERVAL_HOURS : fréquence des vérifications (défaut : toutes les heures).
-    # CHECK_OFFSET_MINUTES : si défini, les vérifications tombent à cette minute pile de l'heure
-    # (ex. 30 => xx:30), pratique pour décaler deux instances qui interrogent le même site.
-    interval_hours = max(1, int(os.environ.get("CHECK_INTERVAL_HOURS", "1") or 1))
-    offset = os.environ.get("CHECK_OFFSET_MINUTES", "").strip()
-    if offset:
-        check_trigger = CronTrigger(hour="*" if interval_hours == 1 else f"*/{interval_hours}", minute=int(offset) % 60)
-    else:
-        check_trigger = IntervalTrigger(hours=interval_hours)
-    scheduler.add_job(check_all_series, check_trigger, id="check_all_series")
+    # Chaque série a sa propre heure de vérification (selon son rythme de sortie, voir schedule.py) : toutes les
+    # 10 minutes, on regarde simplement lesquelles sont dues. Les anciens réglages globaux n'ont plus d'effet.
+    for old in LEGACY_CHECK_SETTINGS:
+        if os.environ.get(old, "").strip():
+            logger.warning("%s n'est plus utilisé (fréquence par série, voir README) : tu peux le retirer du fichier .env", old)
+    check_trigger = IntervalTrigger(minutes=DUE_CHECK_EVERY_MINUTES, jitter=60)
+    scheduler.add_job(
+        run_due_checks, check_trigger, id="run_due_checks",
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2),
+    )
     scheduler.add_job(scheduled_backup, CronTrigger(hour=3, minute=0), id="daily_backup")
     # ANILIST_SYNC_MINUTES : fréquence de la copie de l'état AniList dans l'appli (défaut 15 ; 0 = désactivée).
     sync_minutes = int(os.environ.get("ANILIST_SYNC_MINUTES", "15") or 0)
@@ -80,7 +88,8 @@ async def lifespan(app: FastAPI):
             kwargs={"force": True}, next_run_time=datetime.now(timezone.utc) + timedelta(seconds=20),
         )
     scheduler.start()
-    logger.info("Planificateur démarré (vérification : %s, sauvegarde quotidienne à 3h)", check_trigger)
+    logger.info("Planificateur démarré (séries dues regardées toutes les %d min, sauvegarde quotidienne à 3h)",
+                DUE_CHECK_EVERY_MINUTES)
     yield
     scheduler.shutdown()
 
@@ -299,11 +308,18 @@ def add_series(payload: AddSeriesRequest):
         raise HTTPException(409, "Cette série est déjà dans ta bibliothèque")
     for category_id in payload.category_ids:
         database.add_series_to_category(series_id, category_id)
+    series = database.get_series_by_id(series_id)
+    plan_next(series, ok=True)  # la page vient d'être lue : inutile de la redemander tout de suite
     return database.get_series_by_id(series_id)
 
 
 @app.post("/api/series/refresh-all")
 def refresh_all(background_tasks: BackgroundTasks):
+    pause = site_pause_message()
+    if pause:
+        raise HTTPException(409, pause)
+    if get_progress()["is_running"]:
+        raise HTTPException(409, "Une vérification est déjà en cours.")
     background_tasks.add_task(check_all_series, "manuel")
     return {"ok": True, "message": "Vérification lancée en arrière-plan"}
 
@@ -488,6 +504,7 @@ def clear_history():
 # ----- Réglages : mises à jour, stockage, sauvegardes -----
 
 class UpdateSettingsRequest(BaseModel):
+    auto_enabled: bool | None = None
     skip_completed: bool | None = None
     skip_unread: bool | None = None
     skip_never_read: bool | None = None
@@ -503,14 +520,42 @@ def _refuse_while_checking():
         raise HTTPException(409, "Une vérification est en cours : réessaie quand elle est terminée.")
 
 
+def _updates_settings() -> dict:
+    return {**database.get_update_settings(), "auto_enabled": database.auto_checks_enabled()}
+
+
 @app.get("/api/settings/updates")
 def get_updates_settings():
-    return database.get_update_settings()
+    return _updates_settings()
 
 
 @app.put("/api/settings/updates")
 def put_updates_settings(payload: UpdateSettingsRequest):
-    return database.set_update_settings(payload.model_dump())
+    values = payload.model_dump()
+    if values.pop("auto_enabled") is not None:
+        database.set_setting("auto_checks_enabled", "1" if payload.auto_enabled else "0")
+    database.set_update_settings(values)
+    return _updates_settings()
+
+
+@app.get("/api/site-status")
+def get_site_status():
+    """État des requêtes vers le site (partagé par toutes les instances du serveur) et file des vérifications."""
+    now = scraper_module.utc_now()
+    due = database.get_due_series(now)
+    upcoming = sorted(s["next_check_at"] for s in database.get_all_series() if s.get("next_check_at"))
+    return {
+        **site_guard.status(),
+        "auto_enabled": database.auto_checks_enabled(),
+        "due_now": len(due),
+        "next_check_at": upcoming[0] if upcoming else None,
+    }
+
+
+@app.post("/api/site-status/clear-pause")
+def clear_site_pause():
+    site_guard.clear_block()
+    return get_site_status()
 
 
 @app.get("/api/storage")

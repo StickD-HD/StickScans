@@ -695,3 +695,15 @@ a.mini-btn {
   display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; border: 1px solid var(--border);
   border-radius: var(--radius-pill); background: var(--surface); color: var(--text); font-size: 0.74rem; text-decoration: none;
 }
+
+/* Mises à jour : état du site (pause après un refus, quota) et prochaine vérification d'une série */
+.pause-banner {
+  margin: 0 16px 12px; padding: 10px 12px; border-radius: var(--radius-md);
+  background: var(--surface); border: 1px solid var(--error); color: var(--error); font-size: 0.8rem;
+}
+.site-status { font-size: 0.82rem; color: var(--muted); }
+.site-status p { margin: 0 0 6px; }
+.site-status strong { color: var(--text); }
+.site-status strong.warn-text { color: var(--error); }
+#detail-next-check { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+#detail-next-check:empty { display: none; }

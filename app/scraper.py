@@ -1,8 +1,24 @@
 """
-Logique de vérification : récupère la page (fetcher), parse, met à jour la base (métadonnées + chapitres).
+Logique de vérification : récupère la page (fetcher), parse, met à jour la base (métadonnées + chapitres),
+puis planifie la prochaine vérification de la série (schedule.py).
+
+- run_due_checks() : lancé toutes les 10 minutes ; ne vérifie que les séries dont l'heure est venue.
+- check_all_series() : « Actualiser toutes les séries » ; même chemin, mêmes limites, pour toutes les séries.
+- check_one_series() : bouton « Actualiser » d'une fiche.
+L'espacement des requêtes, le plafond quotidien et la pause après un refus sont gérés par fetcher / site_guard,
+pour toutes les instances du serveur à la fois.
 Garde aussi un état de progression en mémoire, consultable via get_progress().
 """
+import logging
+import threading
+import time
+from datetime import datetime, timezone
+from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
+
+from . import database, schedule, scrape_cache, site_guard
+from .fetcher import BlockedError, SiteBusy, fetch_html, format_wait
+from .parse_series import parse_series_page
 
 SCAN_MANGA_HOSTS = {"scan-manga.com", "www.scan-manga.com", "m.scan-manga.com"}
 
@@ -18,23 +34,15 @@ def normalize_series_url(url: str) -> str | None:
     return "https://www.scan-manga.com" + parsed.path + (f"?{parsed.query}" if parsed.query else "")
 
 
-import os
-import time
-import random
-import logging
-import threading
-from logging.handlers import RotatingFileHandler
-
-from . import database, scrape_cache
-from .fetcher import BlockedError, fetch_html
-from .parse_series import parse_series_page
-
 logger = logging.getLogger("manhwa-tracker.scraper")
 
 # Journal des vérifications : un fichier texte lisible, aussi consultable depuis l'appli.
 # Il se trouve dans le dossier data/ (donc visible depuis l'hôte : ./data/logs/scrape.log).
 LOG_FILE = database.DB_PATH.parent / "logs" / "scrape.log"
 checks_log = logging.getLogger("manhwa-tracker.checks")
+
+# Attente maximale de son tour (une autre instance peut être en train d'interroger le site).
+QUEUE_MAX_WAIT_SECONDS = 15 * 60
 
 
 def _setup_checks_log():
@@ -66,10 +74,9 @@ def format_duration(seconds: float) -> str:
     return f"{hours}h{minutes:02d}min"
 
 
-# Pause aléatoire entre deux séries (pour ne pas enchaîner les requêtes vers le site).
-# Réglable avec CHECK_MIN_DELAY_SECONDS / CHECK_MAX_DELAY_SECONDS (défaut : 3 à 8 s).
-MIN_DELAY_SECONDS = max(0.0, float(os.environ.get("CHECK_MIN_DELAY_SECONDS", "3")))
-MAX_DELAY_SECONDS = max(MIN_DELAY_SECONDS, float(os.environ.get("CHECK_MAX_DELAY_SECONDS", "8")))
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 _progress_lock = threading.Lock()
 _progress = {
@@ -90,17 +97,28 @@ def _set_progress(**kwargs):
         _progress.update(kwargs)
 
 
-def _check(series: dict, run_id: int | None, use_cache: bool = False, bulk: bool = False) -> dict:
-    """Vérifie une série, mesure la durée, l'enregistre dans le journal (base + fichier).
+def plan_next(series: dict, ok: bool, now: datetime | None = None) -> None:
+    """Planifie la prochaine vérification automatique d'une série qui vient d'être vérifiée (ou ajoutée)."""
+    now = now or utc_now()
+    if ok:
+        added_at = database.parse_utc(series["added_at"]) if series.get("added_at") else now
+        hours, reason = schedule.interval(database.get_discovery_times(series["id"]), added_at, now)
+    else:
+        hours, reason = schedule.ERROR_HOURS, "error"
+    database.set_next_check(series["id"], now + schedule.jittered(hours), reason)
 
-    use_cache : réutiliser la copie récente d'une autre instance (vérifications automatiques seulement ;
-    un clic manuel va toujours chercher la page sur le site).
-    bulk : vérification groupée ; un blocage du site n'y est pas inscrit comme erreur de la série."""
+
+def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: float | None = None) -> dict:
+    """Vérifie une série, mesure la durée, l'enregistre dans le journal (base + fichier) et planifie la suivante.
+
+    use_cache : réutiliser la copie récente d'une autre instance au lieu de solliciter le site.
+    Une pause du site (refus, plafond quotidien, tour pas encore venu) n'est jamais inscrite comme erreur de la série :
+    elle n'y est pour rien, et elle reste à vérifier."""
     started = time.monotonic()
     title = series.get("title") or series["url"]
     new_numbers: list[str] = []
     error = None
-    blocked = False
+    paused = False
     source = "site"
     cache_age = 0.0
     try:
@@ -111,7 +129,7 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, bulk: bool
                 html, cache_age = cached
                 source = "cache"
         if html is None:
-            html = fetch_html(series["url"])
+            html = fetch_html(series["url"], max_wait=max_wait)
         try:
             parsed = parse_series_page(html)
         except Exception:
@@ -119,22 +137,24 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, bulk: bool
                 raise
             # copie illisible : on retente avec la vraie page du site
             source = "site"
-            html = fetch_html(series["url"])
+            html = fetch_html(series["url"], max_wait=max_wait)
             parsed = parse_series_page(html)
         title = parsed.get("title") or title
         new_numbers = [c["number"] for c in database.update_series_result(series["id"], parsed)]
         if source == "site":
-            scrape_cache.write(series["url"], html)  # sans effet hors du mode « write »
+            scrape_cache.write(series["url"], html)  # sans effet hors des modes « write » et « both »
     except Exception as e:  # une série en échec (réseau, page illisible) ne doit pas bloquer les autres
         error = str(e) or e.__class__.__name__
-        blocked = isinstance(e, BlockedError)
-        if not (blocked and bulk):
-            # Pendant une vérification groupée, un blocage du site n'est pas la faute de la série.
+        paused = isinstance(e, (BlockedError, SiteBusy))
+        if not paused:
             database.update_series_error(series["id"], error)
     duration = time.monotonic() - started
 
+    if not paused:
+        plan_next(series, ok=error is None)
+
     if error:
-        checks_log.error("ERREUR   %7s  %s — %s", format_duration(duration), title, error)
+        checks_log.error("%s %7s  %s — %s", "PAUSE   " if paused else "ERREUR  ", format_duration(duration), title, error)
     elif source == "cache":
         detail = f"chapitre(s) {', '.join(new_numbers)}" if new_numbers else "rien de nouveau"
         checks_log.info("COPIE    %7s  %s — %s (copie de %d min, site non sollicité)", format_duration(duration), title, detail, round(cache_age / 60))
@@ -146,17 +166,21 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, bulk: bool
     if run_id is not None:
         database.add_check_item(run_id, series["id"], title, duration, error is None, new_numbers, error, source)
     return {"ok": error is None, "duration": duration, "new": len(new_numbers), "source": source,
-            "blocked": blocked}
+            "blocked": paused, "error": error}
 
 
 def check_one_series(series: dict) -> dict:
-    """Vérification manuelle d'une seule série (bouton « Actualiser »)."""
+    """Vérification manuelle d'une seule série (bouton « Actualiser ») : toujours la vraie page du site.
+    Renvoie la série à jour ; check_error contient le message si la vérification n'a pas pu se faire."""
     run_id = database.start_check_run("série", 1)
     started = time.monotonic()
     checks_log.info("=== Vérification [série] : %s ===", series.get("title") or series["url"])
-    _check(series, run_id)
-    database.finish_check_run(run_id, time.monotonic() - started)
-    return database.get_series_by_id(series["id"])
+    result = _check(series, run_id)
+    database.finish_check_run(run_id, time.monotonic() - started,
+                              status="interrompue" if result["blocked"] else "terminée")
+    updated = database.get_series_by_id(series["id"])
+    updated["check_error"] = result["error"]
+    return updated
 
 
 COMPLETED_STATUSES = {"terminé", "terminée", "completed"}
@@ -181,48 +205,62 @@ def skip_reason(series: dict, rules: dict) -> str | None:
     return None
 
 
-def check_all_series(trigger: str = "auto"):
+def _split_skipped(candidates: list[dict]) -> tuple[list[dict], str]:
+    rules = database.get_update_settings()
+    queue, skipped = [], {}
+    for series in candidates:
+        reason = skip_reason(series, rules)
+        if reason:
+            skipped[reason] = skipped.get(reason, 0) + 1
+        else:
+            queue.append(series)
+    n_skipped = sum(skipped.values())
+    detail = ""
+    if n_skipped:
+        detail = " (%d ignorée(s) par les réglages : %s)" % (
+            n_skipped, ", ".join(f"{n} {SKIP_LABELS[k]}" for k, n in skipped.items()))
+    return queue, detail
+
+
+def site_pause_message() -> str | None:
+    """Message affichable si aucune requête ne peut partir en ce moment (pause après un refus ou plafond atteint)."""
+    st = site_guard.status()
+    if st["blocked"]:
+        return f"Le site est en pause après un refus (encore {format_wait(st['remaining_seconds'])}) : aucune requête n'est envoyée."
+    if st["quota_reached"]:
+        return f"La limite de {st['daily_limit']} requêtes par jour est atteinte : reprise demain."
+    return None
+
+
+def _run_queue(select, trigger: str) -> None:
+    """select() -> (séries à vérifier, détail des séries ignorées) ; appelée une fois la vérification réservée."""
     with _progress_lock:
         if _progress["is_running"]:
             logger.info("Vérification déjà en cours, on ignore ce déclenchement")
             return
         _progress.update({"is_running": True, "total": 0, "completed": 0, "current_title": None})
 
-    run_id = None
     started = time.monotonic()
     try:
-        rules = database.get_update_settings()
-        queue, skipped = [], {}
-        for series in database.get_all_series():
-            reason = skip_reason(series, rules)
-            if reason:
-                skipped[reason] = skipped.get(reason, 0) + 1
-            else:
-                queue.append(series)
-        n_skipped = sum(skipped.values())
-        skipped_detail = ""
-        if n_skipped:
-            skipped_detail = " (%d ignorée(s) par les réglages : %s)" % (
-                n_skipped, ", ".join(f"{n} {SKIP_LABELS[k]}" for k, n in skipped.items()))
-
+        queue, skipped_detail = select()
+        if not queue:
+            return
         _set_progress(total=len(queue))
         run_id = database.start_check_run(trigger, len(queue))
         checks_log.info("=== Vérification [%s] : début, %d série(s)%s ===", trigger, len(queue), skipped_detail)
 
         ok = errors = new_chapters = from_cache = 0
-        interrupted = False
+        interrupted = None
         slowest = (0.0, "")
-        use_cache = trigger == "auto" and scrape_cache.MODE in ("read", "both")
         scrape_cache.purge_old()
         for i, series in enumerate(queue):
             _set_progress(current_title=series.get("title"))
-
-            result = _check(series, run_id, use_cache=use_cache, bulk=True)
+            result = _check(series, run_id, use_cache=True, max_wait=QUEUE_MAX_WAIT_SECONDS)
             if result["blocked"]:
-                # Le site refuse les requêtes : inutile d'insister avec les séries restantes.
-                interrupted = True
+                # Le site refuse, le plafond est atteint ou il est occupé : inutile d'insister avec les séries restantes,
+                # elles restent « à vérifier » et repasseront dès que possible.
+                interrupted = result["error"]
                 errors += 1
-                _set_progress(completed=len(queue))
                 break
             from_cache += 1 if result["source"] == "cache" else 0
             ok += 1 if result["ok"] else 0
@@ -231,13 +269,10 @@ def check_all_series(trigger: str = "auto"):
             if result["duration"] > slowest[0]:
                 slowest = (result["duration"], series.get("title") or series["url"])
             _set_progress(completed=i + 1)
-            # La pause ne sert qu'entre deux vraies requêtes vers le site : rien à attendre après une copie.
-            if i < len(queue) - 1 and result["source"] != "cache":
-                time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
 
         if interrupted:
-            checks_log.error("=== Vérification [%s] interrompue : le site refuse les requêtes. "
-                             "Les séries restantes seront revérifiées au prochain passage ===", trigger)
+            checks_log.error("=== Vérification [%s] interrompue : %s. Les séries restantes repasseront dès que possible ===",
+                             trigger, interrupted)
         total_duration = time.monotonic() - started
         database.finish_check_run(run_id, total_duration, status="interrompue" if interrupted else "terminée")
         checks_log.info(
@@ -250,7 +285,33 @@ def check_all_series(trigger: str = "auto"):
         logger.exception("La vérification a été interrompue par une erreur inattendue")
         checks_log.error("=== Vérification [%s] interrompue par une erreur inattendue ===", trigger)
     finally:
-        _set_progress(is_running=False, current_title=None)
+        _set_progress(is_running=False, current_title=None, total=0, completed=0)
+
+
+_last_pause_logged = None
+
+
+def run_due_checks() -> None:
+    """Toutes les 10 minutes : vérifie les séries dont l'heure est venue (rien du tout si les vérifications
+    automatiques sont désactivées ou si le site est en pause)."""
+    global _last_pause_logged
+    if not database.auto_checks_enabled():
+        return
+    pause = site_pause_message()
+    if pause:
+        key = pause.split("(")[0]
+        if key != _last_pause_logged:  # une seule ligne dans le journal par pause, pas une toutes les 10 minutes
+            checks_log.info("=== %s ===", pause)
+            _last_pause_logged = key
+        return
+    _last_pause_logged = None
+    _run_queue(lambda: _split_skipped(database.get_due_series(utc_now())), "auto")
+
+
+def check_all_series(trigger: str = "manuel") -> None:
+    """« Actualiser toutes les séries » : toutes les séries non ignorées par les réglages, avec les mêmes limites
+    (requêtes espacées, copie récente d'une autre instance réutilisée)."""
+    _run_queue(lambda: _split_skipped(database.get_all_series()), trigger)
 
 
 def fetch_and_parse_new_url(url: str) -> dict:
