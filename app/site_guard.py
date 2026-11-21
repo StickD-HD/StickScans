@@ -32,6 +32,9 @@ BACKOFF_HOURS = (2, 6, 24, 72)
 STRIKE_RESET_SECONDS = 48 * 3600
 MAX_RETRY_AFTER_SECONDS = 7 * 86400
 
+HISTORY_DAYS = 14   # requêtes par jour gardées pour l'écran Vérifications
+BLOCKS_KEPT = 20    # derniers refus du site gardés
+
 STATE_FILE = "site_state.json"
 _thread_lock = threading.Lock()
 
@@ -107,6 +110,9 @@ def reserve(now: float | None = None) -> tuple[str, float]:
         st["next_slot"] = now + random.uniform(MIN_GAP_SECONDS, MAX_GAP_SECONDS)
         st["requests_today"] = int(st.get("requests_today") or 0) + 1
         st["last_request_at"] = now
+        per_day = st.get("per_day") if isinstance(st.get("per_day"), dict) else {}
+        per_day[today] = int(per_day.get(today) or 0) + 1
+        st["per_day"] = {d: per_day[d] for d in sorted(per_day)[-HISTORY_DAYS:]}
         return "ok", 0.0
 
 
@@ -119,6 +125,9 @@ def record_block(reason: str, retry_after: float | None = None, now: float | Non
         if retry_after:
             duration = max(duration, min(float(retry_after), MAX_RETRY_AFTER_SECONDS))
         st.update(blocked_until=now + duration, strikes=strikes, last_block_at=now, last_block_reason=reason)
+        blocks = st.get("blocks") if isinstance(st.get("blocks"), list) else []
+        blocks.append({"at": now, "reason": reason, "seconds": duration, "strike": strikes})
+        st["blocks"] = blocks[-BLOCKS_KEPT:]
         return duration
 
 
@@ -162,6 +171,23 @@ def status(now: float | None = None) -> dict:
             "max_gap_seconds": MAX_GAP_SECONDS,
             "shared": str(state_dir()) != str(_data_dir()),
         }
+
+
+def history(days: int = 7, now: float | None = None) -> dict:
+    """Requêtes vers le site jour par jour (UTC, toutes instances confondues) et derniers refus du site."""
+    now = time.time() if now is None else now
+    with _state() as st:
+        per_day = st.get("per_day") if isinstance(st.get("per_day"), dict) else {}
+        blocks = st.get("blocks") if isinstance(st.get("blocks"), list) else []
+    dates = [_day(now - 86400 * i) for i in range(days - 1, -1, -1)]
+    return {
+        "per_day": [{"date": d, "count": int(per_day.get(d) or 0)} for d in dates],
+        "daily_limit": DAILY_LIMIT,
+        "blocks": [
+            {"at": _iso(b.get("at")), "reason": b.get("reason"), "seconds": b.get("seconds"), "strike": b.get("strike")}
+            for b in reversed(blocks)
+        ],
+    }
 
 
 def _data_dir() -> Path:

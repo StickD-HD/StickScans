@@ -442,9 +442,33 @@ def import_database(file: UploadFile = File(...)):
 
     return {"status": "ok", "backup": safe.name if safe else None}
     
-@app.get("/api/checks/summary")
-def checks_summary():
-    return database.get_check_summary()
+SKIP_SHORT_LABELS = {"skip_completed": "terminée", "skip_unread": "chapitres non lus", "skip_never_read": "jamais lue"}
+
+
+@app.get("/api/checks/overview")
+def checks_overview():
+    """Écran Vérifications : état du site, requêtes par jour, file d'attente des séries, erreurs récentes."""
+    rules = database.get_update_settings()
+    queue = []
+    for s in database.get_all_series():
+        reason = scraper_module.skip_reason(s, rules)
+        queue.append({
+            "series_id": s["id"],
+            "title": s.get("title") or s["url"],
+            "next_check_at": s.get("next_check_at"),
+            "reason": s.get("check_reason"),
+            "skipped": SKIP_SHORT_LABELS.get(reason),
+            "last_checked_at": s.get("last_checked_at"),
+            "last_error": s.get("last_error"),
+        })
+    # À vérifier d'abord (jamais planifiées en tête), puis les séries ignorées par les réglages.
+    queue.sort(key=lambda q: (q["skipped"] is not None, q["next_check_at"] or "", q["title"].lower()))
+    return {
+        "site": {**site_guard.status(), "auto_enabled": database.auto_checks_enabled()},
+        "history": site_guard.history(days=7),
+        "queue": queue,
+        "errors": database.get_recent_check_errors(),
+    }
 
 
 @app.get("/api/checks/log")

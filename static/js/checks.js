@@ -1,7 +1,6 @@
-// Réglages › Vérifications : journal des vérifications.
+// Réglages › Vérifications : état du site, requêtes par jour, file d'attente, erreurs, refus et journal détaillé.
 // Fichier 6/15 : chargé dans l'ordre par index.html ; tous partagent la même portée globale.
 
-// --- Journal des vérifications (Réglages > Voir le journal) ---
 
 function fmtDuration(sec) {
   if (sec == null) return "—";
@@ -22,32 +21,66 @@ function formatWhen(dateStr) {
 
 const TRIGGER_LABELS = { auto: "Auto", manuel: "Manuel", "série": "1 série" };
 
-function renderChecksSummary(s) {
-  const last = s.last_run;
-  const errClass = s.errors_24h > 0 ? " warn" : "";
-  document.getElementById("checks-summary").innerHTML = `
-    <div class="stat-box"><strong>${last ? fmtDuration(last.duration_seconds) : "—"}</strong><span>dernière vérification${last && last.status !== "terminée" ? " (" + last.status + ")" : ""}</span></div>
-    <div class="stat-box"><strong>${fmtDuration(s.avg_run_seconds)}</strong><span>durée moyenne (auto)</span></div>
-    <div class="stat-box"><strong>${fmtDuration(s.avg_series_seconds)}</strong><span>par série, en moyenne</span></div>
-    <div class="stat-box${errClass}"><strong>${s.errors_24h} / ${s.checks_24h}</strong><span>erreurs sur 24 h</span></div>
-    ${s.from_cache_24h > 0 ? `<div class="stat-box"><strong>${s.from_cache_24h}</strong><span>reprises d'une copie (24 h), site non sollicité</span></div>` : ""}
-  `;
-  const runs = s.recent_runs;
-  let extra = "";
-  if (runs.length) {
-    const max = Math.max(...runs.map((r) => r.duration_seconds), 1);
-    const bars = runs.map((r) => {
-      const h = Math.max(4, Math.round((r.duration_seconds / max) * 44));
-      const tip = `${formatWhen(r.started_at)} · ${fmtDuration(r.duration_seconds)}${r.error_count ? " · " + r.error_count + " erreur(s)" : ""}`;
-      return `<div class="run-col" title="${escapeHtml(tip)}"><i class="${r.error_count ? "err" : "on"}" style="height:${h}px"></i></div>`;
-    }).join("");
-    extra += `<div class="week-chart"><div class="week-title">Durée des ${runs.length} dernières vérifications automatiques · max ${fmtDuration(max)}</div><div class="run-bars">${bars}</div></div>`;
-  }
-  if (s.slowest_series.length) {
-    extra += `<div class="week-chart"><div class="week-title">Séries les plus lentes · 7 derniers jours</div>` +
-      s.slowest_series.map((x) => `<div class="slow-row"><span>${escapeHtml(x.series_title)}</span><b>${fmtDuration(x.avg_seconds)}</b></div>`).join("") + `</div>`;
-  }
-  document.getElementById("checks-extra").innerHTML = extra;
+// Liste dépliable : les `shown` premières lignes, puis un bouton pour voir le reste.
+function foldableList(rows, shown, moreLabel) {
+  if (rows.length <= shown) return rows.join("");
+  return rows.slice(0, shown).join("") +
+    `<div class="hidden fold-rest">${rows.slice(shown).join("")}</div>` +
+    `<button type="button" class="fold-btn">${moreLabel}</button>`;
+}
+
+function renderChecksOverview(d) {
+  const st = d.site;
+  const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
+
+  // État du site et requêtes du jour
+  const pause = sitePauseText(st);
+  const state = `<div class="checks-card">
+    <p>${pause ? `<strong class="warn-text">⏸ ${escapeHtml(pause)}</strong>` : "<strong>✓ Requêtes autorisées</strong>"}</p>
+    <p>${plural(st.requests_today, "requête", "requêtes")} aujourd'hui sur ${st.daily_limit} au maximum${st.shared ? ", toutes instances du serveur confondues" : ""}.</p>
+  </div>`;
+
+  // Requêtes par jour (7 jours)
+  const days = d.history.per_day;
+  const max = Math.max(1, ...days.map((x) => x.count));
+  const letters = ["D", "L", "M", "M", "J", "V", "S"];
+  const bars = days.map((x) => {
+    const height = x.count === 0 ? 3 : Math.max(8, Math.round((x.count / max) * 44));
+    const letter = letters[new Date(x.date + "T12:00:00").getDay()];
+    return `<div class="week-col" title="${escapeHtml(x.date)} : ${x.count}"><em>${x.count || ""}</em><i class="${x.count ? "on" : ""}" style="height:${height}px"></i><b>${letter}</b></div>`;
+  }).join("");
+  const chart = `<div class="week-chart"><div class="week-title">Requêtes vers le site · 7 jours · max ${d.history.daily_limit} par jour</div><div class="week-bars">${bars}</div></div>`;
+
+  // File d'attente
+  const queueRows = d.queue.map((q) => {
+    const when = q.skipped
+      ? `<span class="q-skip">ignorée · ${escapeHtml(q.skipped)}</span>`
+      : `${escapeHtml(q.next_check_at ? formatFuture(q.next_check_at) : "dès que possible")}${CHECK_REASON_LABELS[q.reason] ? `<small>${escapeHtml(CHECK_REASON_LABELS[q.reason])}</small>` : ""}`;
+    return `<div class="q-row${q.last_error ? " bad" : ""}"><span class="q-title">${q.last_error ? "⚠ " : ""}${escapeHtml(q.title)}</span><span class="q-when">${when}</span></div>`;
+  });
+  const queue = `<section class="checks-block"><h2>Prochaines vérifications</h2>${
+    queueRows.length ? foldableList(queueRows, 8, `Voir les ${queueRows.length} séries`) : '<p class="empty-msg">Aucune série.</p>'}</section>`;
+
+  // Erreurs des séries (7 jours)
+  const errorRows = d.errors.map((e) =>
+    `<div class="q-row bad"><span class="q-title">${escapeHtml(e.series_title || "?")}<small class="run-error">${escapeHtml(e.error || "")}</small></span><span class="q-when">${escapeHtml(formatWhen(e.started_at))}</span></div>`);
+  const errors = `<section class="checks-block"><h2>Erreurs des séries · 7 jours</h2>${
+    errorRows.length ? foldableList(errorRows, 5, `Voir les ${errorRows.length} erreurs`) : '<p class="empty-msg">Aucune erreur ✓</p>'}</section>`;
+
+  // Refus du site
+  const blockRows = d.history.blocks.map((b) => {
+    const when = new Date(b.at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return `<div class="q-row"><span class="q-title">${escapeHtml(b.reason || "?")}<small>refus n° ${b.strike} · pause de ${formatWait(b.seconds)}</small></span><span class="q-when">${escapeHtml(when)}</span></div>`;
+  });
+  const blocks = `<section class="checks-block"><h2>Refus du site</h2>${
+    blockRows.length ? foldableList(blockRows, 3, `Voir les ${blockRows.length} refus`) : '<p class="empty-msg">Aucun refus enregistré ✓</p>'}</section>`;
+
+  const box = document.getElementById("checks-overview");
+  box.innerHTML = state + chart + queue + errors + blocks;
+  box.querySelectorAll(".fold-btn").forEach((btn) => btn.addEventListener("click", () => {
+    btn.previousElementSibling.classList.remove("hidden");
+    btn.remove();
+  }));
 }
 
 function renderChecksList(runs) {
@@ -102,8 +135,8 @@ function renderRunDetail(run) {
 }
 
 async function loadChecks() {
-  const [summaryRes, listRes] = await Promise.all([fetch("/api/checks/summary"), fetch("/api/checks?limit=60")]);
-  renderChecksSummary(await summaryRes.json());
+  const [overviewRes, listRes] = await Promise.all([fetch("/api/checks/overview"), fetch("/api/checks?limit=60")]);
+  renderChecksOverview(await overviewRes.json());
   renderChecksList(await listRes.json());
 }
 

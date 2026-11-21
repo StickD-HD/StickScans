@@ -246,41 +246,20 @@ def get_check_run(run_id: int) -> dict | None:
         return {**dict(run), "items": [dict(i) for i in items]}
 
 
-def get_check_summary() -> dict:
+def get_recent_check_errors(days: int = 7, limit: int = 30) -> list[dict]:
+    """Erreurs des séries (page introuvable, illisible, réseau...) sur les derniers jours, les plus récentes d'abord.
+    Les pauses du site n'en font pas partie : ce ne sont pas des erreurs des séries."""
     with get_conn() as conn:
-        last_run = conn.execute("SELECT * FROM check_runs ORDER BY id DESC LIMIT 1").fetchone()
-        done = conn.execute(
-            "SELECT id, started_at, duration_seconds, error_count, trigger FROM check_runs "
-            "WHERE status = 'terminée' AND trigger = 'auto' ORDER BY id DESC LIMIT 24"
-        ).fetchall()
-        done = list(reversed([dict(r) for r in done]))
-        avg_run = sum(r["duration_seconds"] for r in done) / len(done) if done else None
-        item_stats = conn.execute(
+        rows = conn.execute(
             """
-            SELECT COUNT(*) AS n, AVG(CASE WHEN i.source = 'cache' THEN NULL ELSE i.duration_seconds END) AS avg_s,
-                   COALESCE(SUM(1 - i.ok), 0) AS errors, COALESCE(SUM(i.source = 'cache'), 0) AS from_cache
+            SELECT i.series_id, i.series_title, i.error, r.started_at
             FROM check_run_items i JOIN check_runs r ON r.id = i.run_id
-            WHERE r.started_at >= datetime('now', '-1 day')
-            """
-        ).fetchone()
-        slowest = conn.execute(
-            """
-            SELECT i.series_title, ROUND(AVG(i.duration_seconds), 1) AS avg_seconds, COUNT(*) AS checks
-            FROM check_run_items i JOIN check_runs r ON r.id = i.run_id
-            WHERE r.started_at >= datetime('now', '-7 days') AND i.series_title IS NOT NULL AND i.source != 'cache'
-            GROUP BY i.series_id ORDER BY AVG(i.duration_seconds) DESC LIMIT 5
-            """
+            WHERE i.ok = 0 AND i.source != 'pause' AND r.started_at >= datetime('now', ?)
+            ORDER BY i.id DESC LIMIT ?
+            """,
+            (f"-{int(days)} days", limit),
         ).fetchall()
-        return {
-            "last_run": dict(last_run) if last_run else None,
-            "avg_run_seconds": round(avg_run, 1) if avg_run is not None else None,
-            "avg_series_seconds": round(item_stats["avg_s"], 1) if item_stats["avg_s"] is not None else None,
-            "checks_24h": item_stats["n"],
-            "errors_24h": item_stats["errors"],
-            "from_cache_24h": item_stats["from_cache"],
-            "recent_runs": done,
-            "slowest_series": [dict(r) for r in slowest],
-        }
+        return [dict(r) for r in rows]
 
 
 # --- Genres (filtre, alimenté par le scraping) ---

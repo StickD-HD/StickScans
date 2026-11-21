@@ -416,17 +416,8 @@ main#library { padding: 0 18px; }
 /* --- Journal des vérifications --- */
 #checks-view header { justify-content: space-between; gap: 8px; }
 #checks-view header h1 { font-size: 1.05rem; margin: 0; }
-#checks-extra { padding: 0 18px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
 #checks-list { padding: 0 18px; }
 .stat-box.warn strong { color: var(--error); }
-.run-bars { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
-.run-col { flex: 1; min-width: 0; display: flex; align-items: flex-end; height: 100%; }
-.run-col i { width: 100%; border-radius: 3px; display: block; }
-.run-col i.on { background: linear-gradient(180deg, var(--accent), var(--accent2)); }
-.run-col i.err { background: var(--error); }
-.slow-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.8rem; padding: 4px 0; }
-.slow-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.slow-row b { color: var(--accent2); flex: none; font-weight: 600; }
 .run-row { border-bottom: 1px solid var(--border); }
 .run-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; cursor: pointer; }
 .run-head strong { font-size: 0.85rem; }
@@ -457,7 +448,6 @@ main#library { padding: 0 18px; }
 .settings-section input { width: 100%; }
 #anilist-token-save { background: var(--accent); color: #06101F; }
 
-#checks-summary { display: flex; gap: 10px; padding: 0 18px 16px; flex-wrap: wrap; }
 #history-stats { padding: 0 18px 4px; }
 .week-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .week-head .week-title { margin: 0; text-align: left; }
@@ -707,3 +697,22 @@ a.mini-btn {
 .site-status strong.warn-text { color: var(--error); }
 #detail-next-check { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
 #detail-next-check:empty { display: none; }
+
+/* Réglages › Vérifications */
+#checks-overview { padding: 0 18px; display: flex; flex-direction: column; gap: 12px; }
+.checks-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--muted); }
+.checks-card p { margin: 0 0 4px; }
+.checks-card p:last-child { margin: 0; }
+.checks-card strong { color: var(--text); }
+.checks-card strong.warn-text { color: var(--error); }
+.checks-block h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 6px 0 6px; }
+.checks-journal { padding: 12px 18px 0; }
+.q-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: 0.8rem; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.q-title { min-width: 0; overflow-wrap: anywhere; }
+.q-title small { display: block; color: var(--muted); font-size: 0.7rem; margin-top: 2px; }
+.q-row.bad .q-title { color: var(--error); }
+.q-when { flex: none; text-align: right; color: var(--accent2); max-width: 45%; }
+.q-when small { display: block; color: var(--muted); font-size: 0.68rem; }
+.q-skip { color: var(--muted); }
+.fold-btn { margin-top: 8px; width: 100%; background: transparent; color: var(--accent2); font-size: 0.8rem; }
+.checks-journal #checks-list { padding: 0; }

@@ -131,3 +131,14 @@ def test_ajout_planifie_la_premiere_verification(db):
     scraper.plan_next(db.get_series_by_id(a), ok=True)
     assert db.get_series_by_id(a)["next_check_at"] is not None
     assert [s["id"] for s in db.get_due_series(scraper.utc_now())] != [a]
+
+
+def test_une_pause_n_est_pas_une_erreur_de_serie(db, monkeypatch):
+    a, b = _two_series(db)
+    monkeypatch.setattr(scraper, "fetch_html", lambda url, *a, **k: (_ for _ in ()).throw(
+        BlockedError("HTTP 403") if url.endswith("a.html") else ValueError("page illisible")))
+    scraper.check_one_series(db.get_series_by_id(b))  # vraie erreur de la série B
+    scraper.check_one_series(db.get_series_by_id(a))  # pause du site pendant la vérification de A
+    errors = db.get_recent_check_errors()
+    assert [e["series_title"] for e in errors] == ["B"]
+    assert errors[0]["error"] == "page illisible"

@@ -161,3 +161,15 @@ def test_arret_de_l_appli_interrompt_l_attente(guard, monkeypatch):
         assert errors == ["Arrêt de l'appli en cours"]
     finally:
         fetcher.STOP.clear()
+
+
+def test_historique_des_requetes_et_des_refus(guard):
+    day = 1_000_000 * 86400.0  # minuit UTC
+    guard.reserve(now=day + 10)
+    guard.reserve(now=day + 10 + 200)
+    guard.reserve(now=day + 86400 + 10)  # lendemain
+    guard.record_block("HTTP 429", now=day + 86400 + 300)
+    h = guard.history(days=3, now=day + 86400 + 400)
+    assert [x["count"] for x in h["per_day"]] == [0, 2, 1]
+    assert h["blocks"][0]["reason"] == "HTTP 429" and h["blocks"][0]["strike"] == 1
+    assert h["blocks"][0]["seconds"] == 2 * 3600

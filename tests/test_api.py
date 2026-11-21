@@ -79,3 +79,14 @@ def test_version_deployee(tmp_path, monkeypatch):
     assert main.app_version() == {"commit": None, "date": None, "subject": None}  # lancé hors déploiement
     (tmp_path / "VERSION").write_text("abc1234|2026-11-21 21:10|Message avec | dedans\n", encoding="utf-8")
     assert main.app_version() == {"commit": "abc1234", "date": "2026-11-21 21:10", "subject": "Message avec | dedans"}
+
+
+def test_ecran_verifications(db, series_id):
+    from datetime import timedelta
+    other = db.insert_series("https://www.scan-manga.com/fini.html", make_parsed([site_chapter(1)], title="Finie", status="Terminé"))
+    db.set_next_check(series_id, scraper.utc_now() + timedelta(hours=3), "window")
+    data = main.checks_overview()
+    assert [q["title"] for q in data["queue"]] == ["Série test", "Finie"]  # séries ignorées à la fin
+    assert data["queue"][0]["reason"] == "window" and data["queue"][1]["skipped"] == "terminée"
+    assert len(data["history"]["per_day"]) == 7 and data["errors"] == []
+    assert data["site"]["auto_enabled"] is True

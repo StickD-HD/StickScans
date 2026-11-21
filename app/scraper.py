@@ -186,7 +186,9 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: 
         checks_log.info("OK       %7s  %s — rien de nouveau", format_duration(duration), title)
 
     if run_id is not None:
-        database.add_check_item(run_id, series["id"], title, duration, error is None, new_numbers, error, source)
+        # « pause » : la série n'a pas pu être vérifiée parce que le site était en pause (ce n'est pas son erreur).
+        database.add_check_item(run_id, series["id"], title, duration, error is None, new_numbers, error,
+                                "pause" if paused else source)
     return {"ok": error is None, "duration": duration, "new": len(new_numbers), "source": source,
             "blocked": paused, "error": error}
 
