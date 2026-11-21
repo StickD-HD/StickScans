@@ -133,3 +133,31 @@ def test_tour_pas_encore_venu(guard, monkeypatch):
     guard.reserve()  # une autre instance vient d'envoyer sa requête
     with pytest.raises(fetcher.SiteBusy):
         fetcher.fetch_html("https://www.scan-manga.com/a.html", max_wait=0)
+
+
+def test_arret_de_l_appli_interrompt_l_attente(guard, monkeypatch):
+    """systemctl restart : l'attente de son tour (jusqu'à 15 min) doit s'interrompre aussitôt."""
+    import threading
+    import time
+
+    monkeypatch.setattr(fetcher._session, "get", lambda url, **kw: pytest.fail("aucune requête ne doit partir"))
+    guard.reserve()  # le tour est pris : la requête suivante devra attendre 45 à 90 s
+    errors = []
+
+    def worker():
+        try:
+            fetcher.fetch_html("https://www.scan-manga.com/a.html", max_wait=900)
+        except fetcher.SiteBusy as e:
+            errors.append(str(e))
+
+    t = threading.Thread(target=worker)
+    started = time.monotonic()
+    t.start()
+    time.sleep(0.2)
+    fetcher.STOP.set()
+    try:
+        t.join(timeout=5)
+        assert not t.is_alive() and time.monotonic() - started < 3
+        assert errors == ["Arrêt de l'appli en cours"]
+    finally:
+        fetcher.STOP.clear()

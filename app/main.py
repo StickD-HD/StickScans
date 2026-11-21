@@ -2,6 +2,7 @@ import logging
 import os
 import sqlite3
 import tempfile
+import threading
 
 from fastapi import UploadFile, File
 from datetime import datetime, timedelta, timezone
@@ -24,6 +25,7 @@ from .parse_series import number_to_float
 from . import backup as backup_files
 from . import storage
 from .backup import replace_database, run_backup
+from . import fetcher
 from .fetcher import FetchError
 from . import site_guard
 from .scraper import (normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress,
@@ -91,7 +93,12 @@ async def lifespan(app: FastAPI):
     logger.info("Planificateur démarré (séries dues regardées toutes les %d min, sauvegarde quotidienne à 3h)",
                 DUE_CHECK_EVERY_MINUTES)
     yield
-    scheduler.shutdown()
+    # Arrêt (systemctl restart / stop) : on interrompt toute attente de tour, on laisse finir la série en cours
+    # (au plus le délai d'une requête), puis on s'arrête sans attendre la fin de la file.
+    fetcher.STOP.set()
+    scheduler.shutdown(wait=False)
+    if not scraper_module.wait_until_idle(timeout=40):
+        logger.warning("Vérification encore en cours à l'arrêt : elle sera notée « interrompue » au prochain démarrage")
 
 
 app = FastAPI(title="Stickscans", lifespan=lifespan)
@@ -315,13 +322,15 @@ def add_series(payload: AddSeriesRequest):
 
 
 @app.post("/api/series/refresh-all")
-def refresh_all(background_tasks: BackgroundTasks):
+def refresh_all():
     pause = site_pause_message()
     if pause:
         raise HTTPException(409, pause)
     if get_progress()["is_running"]:
         raise HTTPException(409, "Une vérification est déjà en cours.")
-    background_tasks.add_task(check_all_series, "manuel")
+    # Fil à part, et non une tâche de la requête : le serveur attend la fin des requêtes avant de s'arrêter,
+    # et une actualisation complète dure de longues minutes (requêtes espacées de 45 à 90 s).
+    threading.Thread(target=check_all_series, args=("manuel",), name="actualisation-manuelle", daemon=True).start()
     return {"ok": True, "message": "Vérification lancée en arrière-plan"}
 
 

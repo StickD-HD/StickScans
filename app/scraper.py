@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
 
-from . import database, schedule, scrape_cache, site_guard
+from . import database, fetcher, schedule, scrape_cache, site_guard
 from .fetcher import BlockedError, SiteBusy, fetch_html, format_wait
 from .parse_series import parse_series_page
 
@@ -291,6 +291,9 @@ def _run_queue(select, trigger: str) -> None:
         slowest = (0.0, "")
         scrape_cache.purge_old()
         for i, series in enumerate(queue):
+            if fetcher.STOP.is_set():
+                interrupted = "arrêt de l'appli"
+                break
             _set_progress(current_title=series.get("title"))
             result = _check(series, run_id, use_cache=True, max_wait=QUEUE_MAX_WAIT_SECONDS)
             if result["blocked"]:
@@ -343,6 +346,15 @@ def run_due_checks() -> None:
         return
     _last_pause_logged = None
     _run_queue(lambda: _split_skipped(database.get_due_series(utc_now())), "auto")
+
+
+def wait_until_idle(timeout: float) -> bool:
+    """À l'arrêt de l'appli : attend la fin de la vérification en cours (quelques secondes au plus, une fois
+    fetcher.STOP posé : le temps de finir la série en cours). Renvoie False si elle tourne encore."""
+    deadline = time.monotonic() + timeout
+    while get_progress()["is_running"] and time.monotonic() < deadline:
+        time.sleep(0.2)
+    return not get_progress()["is_running"]
 
 
 def check_all_series(trigger: str = "manuel") -> None:

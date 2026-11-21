@@ -12,6 +12,7 @@ Règles :
 """
 import os
 import re
+import threading
 import time
 from email.utils import parsedate_to_datetime
 
@@ -24,6 +25,10 @@ USER_AGENT = "ScanMangaMetadataCollector/1.0" + (f" (+{CONTACT})" if CONTACT els
 CHALLENGE_MARKERS = ("cf-chl", "Just a moment", "captcha-delivery", "Attention Required", "ddos-guard")
 READY_RE = re.compile(r'<h2[^>]*itemprop="[^"]*headline')
 DEFAULT_TIMEOUT_MS = 30000
+
+# Mis à 1 quand l'appli s'arrête : toute attente de tour s'interrompt aussitôt (sinon l'arrêt attendrait
+# jusqu'à la fin de la vérification en cours, et systemd finirait par tuer l'appli au bout de 90 s).
+STOP = threading.Event()
 
 _session = requests.Session()
 _session.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "fr-FR,fr;q=0.9"})
@@ -72,6 +77,8 @@ def _retry_after(resp) -> float | None:
 def _wait_for_slot(max_wait: float) -> None:
     deadline = time.monotonic() + max_wait
     while True:
+        if STOP.is_set():
+            raise SiteBusy("Arrêt de l'appli en cours")
         answer, seconds = site_guard.reserve()
         if answer == "ok":
             return
@@ -83,7 +90,7 @@ def _wait_for_slot(max_wait: float) -> None:
             )
         if time.monotonic() + seconds > deadline:
             raise SiteBusy(f"Une autre vérification utilise le site : réessaie dans {format_wait(seconds)}")
-        time.sleep(seconds + 0.05)
+        STOP.wait(seconds + 0.05)  # comme time.sleep, mais interrompu net par un arrêt de l'appli
 
 
 def fetch_html(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float | None = None) -> str:
