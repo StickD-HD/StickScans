@@ -15,6 +15,10 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+# Clé de session fixe : importer app.main ne doit pas créer de fichier data/auth_secret dans le dépôt.
+os.environ.setdefault("AUTH_SECRET", "cle-de-test")
+os.environ.pop("AUTH_PASSWORD", None)
+
 # Pas de cache de pages partagé pendant les tests, quelle que soit la configuration de la machine.
 os.environ.pop("SCRAPE_CACHE_DIR", None)
 os.environ.pop("SCRAPE_CACHE_MODE", None)

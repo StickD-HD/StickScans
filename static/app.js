@@ -1152,6 +1152,26 @@ async function toggleChapterRead(chapterId, isRead) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ is_read: isRead }),
   });
+  scheduleAnilistRefresh();
+}
+
+// La progression part vers AniList en arrière-plan (la réponse n'attend plus AniList) : quelques secondes plus tard,
+// on relit seulement la partie AniList de la fiche pour y voir la nouvelle progression, ou l'erreur éventuelle.
+// Rien n'est fait si le panneau AniList est ouvert (saisie possible) ou si une autre fiche a été ouverte entre-temps.
+let anilistRefreshTimer = null;
+function scheduleAnilistRefresh() {
+  if (currentAnilistProgress === null) return; // série non liée à AniList
+  clearTimeout(anilistRefreshTimer);
+  const seriesId = currentSeriesId;
+  anilistRefreshTimer = setTimeout(async () => {
+    if (currentSeriesId !== seriesId || !anilistLinked.classList.contains("hidden")) return;
+    try {
+      const res = await fetch(`/api/series/${seriesId}`);
+      if (res.ok && currentSeriesId === seriesId && anilistLinked.classList.contains("hidden")) {
+        renderAnilistSection(await res.json());
+      }
+    } catch (e) {}
+  }, 4000);
 }
 
 async function markReadUpTo(number) {
@@ -1161,6 +1181,7 @@ async function markReadUpTo(number) {
     body: JSON.stringify({ number: String(number) }),
   });
   loadChapters();
+  scheduleAnilistRefresh();
 }
 
 function setSelectionMode(on) {
@@ -1197,6 +1218,7 @@ async function bulkSetRead(isRead) {
   });
   setSelectionMode(false);
   loadChapters();
+  scheduleAnilistRefresh();
 }
 
 bulkReadBtn.addEventListener("click", () => bulkSetRead(true));
@@ -1325,6 +1347,7 @@ document.addEventListener("visibilitychange", () => {
 const anilistNotesInput = document.getElementById("anilist-notes-input");
 const anilistNotesCount = document.getElementById("anilist-notes-count");
 let savedNotes = ""; // dernière valeur connue côté AniList : seule une note modifiée est envoyée
+let savedDates = { start: "", end: "" }; // idem pour les dates : une date vidée est effacée sur AniList
 
 function updateNotesCount() {
   anilistNotesCount.textContent = `${anilistNotesInput.value.length}/${anilistNotesInput.maxLength}`;
@@ -1344,8 +1367,9 @@ function renderAnilistSection(s) {
     savedNotes = s.anilist_notes || "";
     anilistNotesInput.value = savedNotes;
     updateNotesCount();
-    anilistStartInput.value = s.anilist_start_date || "";
-    anilistEndInput.value = s.anilist_end_date || "";
+    savedDates = { start: s.anilist_start_date || "", end: s.anilist_end_date || "" };
+    anilistStartInput.value = savedDates.start;
+    anilistEndInput.value = savedDates.end;
     anilistStatusText.textContent = s.anilist_last_error ? "⚠️ " + s.anilist_last_error : "";
   } else {
     anilistActionBtn.textContent = "🔗 AniList";
@@ -1422,9 +1446,10 @@ anilistSaveBtn.addEventListener("click", async () => {
       status: anilistStatusSelect.value,
       progress: anilistProgressInput.value !== "" ? parseInt(anilistProgressInput.value, 10) : null,
       score: anilistScoreInput.value !== "" ? parseFloat(anilistScoreInput.value) : null,
-      start_date: anilistStartInput.value || null,
-      end_date: anilistEndInput.value || null,
     };
+    // Dates envoyées seulement si elles ont changé ; "" (champ vidé) efface la date sur AniList.
+    if (anilistStartInput.value !== savedDates.start) payload.start_date = anilistStartInput.value;
+    if (anilistEndInput.value !== savedDates.end) payload.end_date = anilistEndInput.value;
     // La note n'est envoyée que si elle a changé : enregistrer autre chose n'écrase pas une note modifiée ailleurs.
     // Une chaîne vide efface la note sur AniList.
     if (typedNotes !== savedNotes) payload.notes = typedNotes;

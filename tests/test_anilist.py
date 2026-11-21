@@ -94,3 +94,53 @@ def test_recherche_anilist_injoignable(monkeypatch, db):
     monkeypatch.setattr(anilist.requests, "post", down)
     with pytest.raises(RuntimeError, match="joindre AniList"):
         anilist.search_media("solo leveling")
+
+
+def test_deux_envois_simultanes_ne_doublent_pas(db, linked, monkeypatch):
+    """Deux chapitres cochés coup sur coup : les envois passent l'un après l'autre, le second voit le premier."""
+    import threading
+    import time
+
+    remote = {"progress": 0}
+    pushed = []
+
+    def fake_fetch(media_id):
+        time.sleep(0.05)  # AniList répond lentement : sans verrou, les deux envois liraient 0
+        return {"status": "CURRENT", "progress": remote["progress"], "score": None, "start_date": None,
+                "end_date": None, "cover_url": None, "notes": None}
+
+    def fake_push(series_id, **kw):
+        pushed.append(kw["progress"])
+        remote["progress"] = kw["progress"]
+
+    monkeypatch.setattr(anilist, "fetch_entry", fake_fetch)
+    monkeypatch.setattr(anilist, "push_update", fake_push)
+    db.mark_read_up_to(linked, 12.0)
+    threads = [threading.Thread(target=anilist.push_progress, args=(linked,)) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert pushed == [12]
+
+
+def test_date_videe_effacee_sur_anilist(db, linked, monkeypatch):
+    sent = {}
+
+    class Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"data": {"SaveMediaListEntry": {"status": "CURRENT", "progress": 3, "score": 0, "notes": None,
+                                                    "startedAt": {"year": None}, "completedAt": {"year": None}}}}
+
+    def fake_post(url, json=None, **kw):
+        sent.update(json["variables"])
+        return Resp()
+
+    monkeypatch.setattr(anilist.requests, "post", fake_post)
+    anilist.push_update(linked, start_date="")
+    assert sent["startedAt"] == {"year": None, "month": None, "day": None}
+    assert "completedAt" not in sent  # date de fin non fournie : inchangée
+    assert db.get_series_by_id(linked)["anilist_start_date"] is None

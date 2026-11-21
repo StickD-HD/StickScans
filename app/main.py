@@ -6,7 +6,7 @@ import tempfile
 from fastapi import UploadFile, File
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -27,7 +27,7 @@ from .backup import replace_database, run_backup
 from .fetcher import FetchError
 from . import site_guard
 from .scraper import (normalize_series_url, check_all_series, check_one_series, fetch_and_parse_new_url, get_progress,
-                      plan_next, run_due_checks, site_pause_message)
+                      maintenance, plan_next, run_due_checks, site_pause_message)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("manhwa-tracker")
@@ -169,8 +169,9 @@ class AnilistUpdateRequest(BaseModel):
     status: str | None = None
     progress: int | None = None
     score: float | None = None
-    start_date: str | None = None
-    end_date: str | None = None
+    # AAAA-MM-JJ, ou "" pour effacer la date sur AniList ; absent (None) = date inchangée
+    start_date: str | None = Field(default=None, pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    end_date: str | None = Field(default=None, pattern=r"^(\d{4}-\d{2}-\d{2})?$")
     notes: str | None = Field(default=None, max_length=500)  # "" = effacer la note
 
 
@@ -361,9 +362,6 @@ MAX_IMPORT_BYTES = 200 * 1024 * 1024
 def import_database(file: UploadFile = File(...)):
     if not (file.filename or "").endswith(".db"):
         raise HTTPException(400, "Le fichier doit être un .db")
-    if get_progress()["is_running"]:
-        raise HTTPException(409, "Une vérification est en cours : réessaie quand elle est terminée.")
-
     tmp_path = database.DB_PATH.with_suffix(".tmp")
     try:
         # 1. Réception du fichier dans un fichier temporaire (taille limitée)
@@ -374,15 +372,19 @@ def import_database(file: UploadFile = File(...)):
                 if size > MAX_IMPORT_BYTES:
                     raise HTTPException(413, "Fichier trop volumineux")
                 buffer.write(chunk)
-        # 2. Contrôle d'intégrité, copie de sécurité de la base actuelle, puis remplacement
-        safe = replace_database(tmp_path)
+        # 2. Contrôle d'intégrité, copie de sécurité de la base actuelle, puis remplacement ;
+        # 3. mise à niveau du schéma si la base importée vient d'une version plus ancienne.
+        # Aucune vérification ne peut démarrer pendant ce temps.
+        with maintenance():
+            safe = replace_database(tmp_path)
+            database.init_db()
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    # 3. Met le schéma de la base importée à niveau si elle vient d'une version plus ancienne
-    database.init_db()
     return {"status": "ok", "backup": safe.name if safe else None}
     
 @app.get("/api/checks/summary")
@@ -431,7 +433,7 @@ def list_chapters(series_id: int):
 
 
 @app.post("/api/series/{series_id}/mark-read-up-to")
-def mark_read_up_to(series_id: int, payload: MarkReadUpToRequest):
+def mark_read_up_to(series_id: int, payload: MarkReadUpToRequest, background_tasks: BackgroundTasks):
     if not database.get_series_by_id(series_id):
         raise HTTPException(404, "Série introuvable")
     try:
@@ -439,16 +441,16 @@ def mark_read_up_to(series_id: int, payload: MarkReadUpToRequest):
     except ValueError:
         raise HTTPException(400, "Numéro de chapitre invalide")
     database.mark_read_up_to(series_id, number_float)
-    anilist.push_progress(series_id)
+    background_tasks.add_task(anilist.push_progress, series_id)  # la réponse n'attend pas AniList
     return database.get_series_by_id(series_id)
 
 
 @app.post("/api/series/{series_id}/mark-all-read")
-def mark_all_read(series_id: int):
+def mark_all_read(series_id: int, background_tasks: BackgroundTasks):
     if not database.get_series_by_id(series_id):
         raise HTTPException(404, "Série introuvable")
     database.mark_all_read(series_id)
-    anilist.push_progress(series_id)
+    background_tasks.add_task(anilist.push_progress, series_id)
     return database.get_series_by_id(series_id)
 
 
@@ -463,19 +465,19 @@ def reset_progress(series_id: int):
 
 
 @app.post("/api/chapters/{chapter_id}/toggle-read")
-def toggle_chapter_read(chapter_id: int, payload: ToggleReadRequest):
+def toggle_chapter_read(chapter_id: int, payload: ToggleReadRequest, background_tasks: BackgroundTasks):
     database.set_chapter_read(chapter_id, payload.is_read)
     series_id = database.get_series_id_for_chapter(chapter_id)
     if series_id:
-        anilist.push_progress(series_id)
+        background_tasks.add_task(anilist.push_progress, series_id)
     return {"ok": True}
 
 
 @app.post("/api/chapters/bulk-read")
-def bulk_toggle_read(payload: BulkReadRequest):
+def bulk_toggle_read(payload: BulkReadRequest, background_tasks: BackgroundTasks):
     database.set_chapters_read(payload.chapter_ids, payload.is_read)
     for series_id in database.get_series_ids_for_chapters(payload.chapter_ids):
-        anilist.push_progress(series_id)
+        background_tasks.add_task(anilist.push_progress, series_id)
     return {"ok": True}
 
 
@@ -515,9 +517,16 @@ class BackupSettingsRequest(BaseModel):
     keep: int | None = Field(default=None, ge=1, le=30)
 
 
-def _refuse_while_checking():
-    if get_progress()["is_running"]:
-        raise HTTPException(409, "Une vérification est en cours : réessaie quand elle est terminée.")
+@contextmanager
+def _exclusive():
+    """Opération qui réécrit ou remplace la base : refusée pendant une vérification, et aucune ne démarre pendant elle."""
+    try:
+        with maintenance():
+            yield
+    except RuntimeError as e:
+        if str(e) == scraper_module.BUSY_MESSAGE:
+            raise HTTPException(409, str(e))
+        raise
 
 
 def _updates_settings() -> dict:
@@ -575,14 +584,14 @@ def clear_logs():
 
 @app.post("/api/storage/clear-check-history")
 def clear_check_history():
-    _refuse_while_checking()
-    return database.clear_check_history()
+    with _exclusive():
+        return database.clear_check_history()
 
 
 @app.post("/api/storage/optimize")
 def optimize_storage():
-    _refuse_while_checking()
-    return storage.optimize_database()
+    with _exclusive():
+        return storage.optimize_database()
 
 
 @app.get("/api/backups")
@@ -629,14 +638,14 @@ def delete_backup(name: str):
 
 @app.post("/api/backups/{name}/restore")
 def restore_backup(name: str):
-    _refuse_while_checking()
     try:
-        safe = backup_files.restore_backup(name)
+        with _exclusive():
+            safe = backup_files.restore_backup(name)
+            database.init_db()  # met le schéma à niveau si la sauvegarde vient d'une version plus ancienne
     except ValueError as e:
         raise HTTPException(400, str(e))
     except FileNotFoundError:
         raise HTTPException(404, "Sauvegarde introuvable")
-    database.init_db()  # met le schéma à niveau si la sauvegarde vient d'une version plus ancienne
     return {"status": "ok", "backup": safe.name if safe else None}
 
 

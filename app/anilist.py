@@ -377,11 +377,24 @@ def push_update(series_id: int, status=None, progress=None, score=None, start_da
         logger.error("Échec de la synchro AniList pour %s : %s", series["title"], e)
 
 
+_push_locks: dict[int, threading.Lock] = {}
+_push_locks_guard = threading.Lock()
+
+
 def push_progress(series_id: int):
-    """Appelé automatiquement à chaque chapitre marqué lu : pousse la progression vers AniList, mais seulement
-    si elle dépasse celle qu'AniList a RÉELLEMENT en ce moment (relue à chaque fois). Ainsi, lire ailleurs puis
-    cocher un vieux chapitre ici ne fait jamais reculer AniList. Le statut passe à « En cours » seulement si la
-    série n'en avait aucun ou était en « À lire »."""
+    """Appelé automatiquement (en arrière-plan) à chaque chapitre marqué lu : pousse la progression vers AniList,
+    mais seulement si elle dépasse celle qu'AniList a RÉELLEMENT en ce moment (relue à chaque fois). Ainsi, lire
+    ailleurs puis cocher un vieux chapitre ici ne fait jamais reculer AniList. Le statut passe à « En cours »
+    seulement si la série n'en avait aucun ou était en « À lire ».
+    Deux envois pour la même série (deux chapitres cochés coup sur coup) passent l'un après l'autre : le second
+    relit AniList après le premier et n'envoie rien si la progression est déjà à jour."""
+    with _push_locks_guard:
+        lock = _push_locks.setdefault(series_id, threading.Lock())
+    with lock:
+        _push_progress(series_id)
+
+
+def _push_progress(series_id: int):
     series = database.get_series_by_id(series_id)
     if not series or not series.get("anilist_id") or not _token():
         return

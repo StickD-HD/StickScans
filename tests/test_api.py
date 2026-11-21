@@ -1,0 +1,74 @@
+"""Routes de l'appli (app/main.py), appelées directement : ni serveur, ni site, ni AniList."""
+import pytest
+from fastapi import BackgroundTasks, HTTPException
+from pydantic import ValidationError
+
+from app import anilist, main, scraper
+from conftest import make_parsed, site_chapter
+
+
+@pytest.fixture
+def series_id(db):
+    return db.insert_series("https://www.scan-manga.com/s.html", make_parsed([site_chapter(n) for n in range(1, 11)]))
+
+
+def test_marquer_lu_n_attend_pas_anilist(db, series_id, monkeypatch):
+    monkeypatch.setattr(anilist, "push_progress", lambda sid: pytest.fail("ne doit pas être appelé pendant la requête"))
+    tasks = BackgroundTasks()
+    result = main.mark_read_up_to(series_id, main.MarkReadUpToRequest(number="5"), tasks)
+    assert result["unread_count"] == 5
+    assert [(t.func, t.args) for t in tasks.tasks] == [(anilist.push_progress, (series_id,))]
+
+
+def test_cocher_plusieurs_chapitres_un_envoi_par_serie(db, series_id):
+    ids = [c["id"] for c in db.get_chapters_for_series(series_id)][:3]
+    tasks = BackgroundTasks()
+    main.bulk_toggle_read(main.BulkReadRequest(chapter_ids=ids, is_read=True), tasks)
+    assert len(tasks.tasks) == 1
+
+
+@pytest.mark.parametrize("value, ok", [("2026-11-21", True), ("", True), (None, True), ("21/11/2026", False), ("2026-1-2", False)])
+def test_format_des_dates_anilist(value, ok):
+    if ok:
+        main.AnilistUpdateRequest(start_date=value)
+    else:
+        with pytest.raises(ValidationError):
+            main.AnilistUpdateRequest(start_date=value)
+
+
+@pytest.fixture
+def check_running():
+    scraper._set_progress(is_running=True)
+    yield
+    scraper._set_progress(is_running=False)
+
+
+def test_restauration_refusee_pendant_une_verification(db, check_running):
+    with pytest.raises(HTTPException) as info:
+        main.restore_backup("manhwa_2026-11-21.db")
+    assert info.value.status_code == 409
+
+
+def test_optimisation_refusee_pendant_une_verification(db, check_running):
+    with pytest.raises(HTTPException) as info:
+        main.optimize_storage()
+    assert info.value.status_code == 409
+
+
+def test_aucune_verification_pendant_une_restauration(db, series_id, monkeypatch):
+    monkeypatch.setattr(scraper, "fetch_html", lambda *a, **k: pytest.fail("aucune requête pendant la maintenance"))
+    with scraper.maintenance():
+        scraper.run_due_checks()
+        scraper.check_all_series("manuel")
+        result = scraper.check_one_series(db.get_series_by_id(series_id))
+    assert "réessaie" in result["check_error"]
+    assert db.list_check_runs() == []
+    # Après la maintenance, tout redevient possible.
+    with scraper.maintenance():
+        pass
+
+
+def test_maintenance_refusee_pendant_une_verification(check_running):
+    with pytest.raises(RuntimeError):
+        with scraper.maintenance():
+            pass

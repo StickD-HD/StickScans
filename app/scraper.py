@@ -12,6 +12,7 @@ Garde aussi un état de progression en mémoire, consultable via get_progress().
 import logging
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
@@ -85,6 +86,27 @@ _progress = {
     "completed": 0,
     "current_title": None,
 }
+
+
+_maintenance = False   # import, restauration ou optimisation de la base en cours
+_single_checks = 0     # vérifications d'une seule série en cours (bouton « Actualiser »)
+BUSY_MESSAGE = "Une vérification est en cours : réessaie quand elle est terminée."
+
+
+@contextmanager
+def maintenance():
+    """Réserve la base pour une opération qui la remplace ou la réécrit (import, restauration, optimisation) :
+    refusée (RuntimeError) si une vérification tourne ; tant qu'elle dure, aucune vérification ne démarre."""
+    global _maintenance
+    with _progress_lock:
+        if _progress["is_running"] or _maintenance or _single_checks:
+            raise RuntimeError(BUSY_MESSAGE)
+        _maintenance = True
+    try:
+        yield
+    finally:
+        with _progress_lock:
+            _maintenance = False
 
 
 def get_progress() -> dict:
@@ -172,6 +194,21 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: 
 def check_one_series(series: dict) -> dict:
     """Vérification manuelle d'une seule série (bouton « Actualiser ») : toujours la vraie page du site.
     Renvoie la série à jour ; check_error contient le message si la vérification n'a pas pu se faire."""
+    global _single_checks
+    with _progress_lock:
+        if _maintenance:
+            current = database.get_series_by_id(series["id"])
+            current["check_error"] = "Opération sur la base en cours (import, restauration…) : réessaie dans un instant."
+            return current
+        _single_checks += 1
+    try:
+        return _check_one(series)
+    finally:
+        with _progress_lock:
+            _single_checks -= 1
+
+
+def _check_one(series: dict) -> dict:
     run_id = database.start_check_run("série", 1)
     started = time.monotonic()
     checks_log.info("=== Vérification [série] : %s ===", series.get("title") or series["url"])
@@ -235,8 +272,8 @@ def site_pause_message() -> str | None:
 def _run_queue(select, trigger: str) -> None:
     """select() -> (séries à vérifier, détail des séries ignorées) ; appelée une fois la vérification réservée."""
     with _progress_lock:
-        if _progress["is_running"]:
-            logger.info("Vérification déjà en cours, on ignore ce déclenchement")
+        if _progress["is_running"] or _maintenance:
+            logger.info("Vérification ou opération sur la base déjà en cours, on ignore ce déclenchement")
             return
         _progress.update({"is_running": True, "total": 0, "completed": 0, "current_title": None})
 
