@@ -25,6 +25,7 @@ const CHECK_REASON_LABELS = {
   late: "sortie en retard",
   dormant: "série probablement en pause",
   error: "après une erreur",
+  missing: "page introuvable",
 };
 const detailSourceLink = document.getElementById("detail-source-link");
 const anilistActionBtn = document.getElementById("anilist-action-btn");
@@ -101,6 +102,7 @@ async function loadSeriesDetail() {
 
   detailAuthor.textContent = s.author ? "Auteur : " + s.author : "";
   detailEditor.textContent = s.editor ? "Éditeur : " + s.editor : "";
+  renderUrlChange(s);
   detailTeam.textContent = s.team ? "Team trad : " + s.team : "";
   document.getElementById("detail-platform").textContent = s.platform ? "Plateforme officielle : " + s.platform : "";
   detailNextCheck.textContent = s.next_check_at
@@ -574,3 +576,62 @@ anilistUnlinkBtn.addEventListener("click", async () => {
 
 closeOnBackdrop(anilistModal);
 closeOnBackdrop(seriesCategoryModal);
+
+
+// --- Fiche déplacée ou disparue du site : nouvelle adresse (chapitres lus et historique gardés) ---
+const urlChange = document.getElementById("url-change");
+const urlChangeText = document.getElementById("url-change-text");
+const urlChangeInput = document.getElementById("url-change-input");
+const urlChangeBtn = document.getElementById("url-change-btn");
+const urlChangeError = document.getElementById("url-change-error");
+const URL_CHANGE_HELP = "Colle la nouvelle adresse de la fiche sur scan-manga : tes chapitres lus et ton historique sont gardés.";
+
+function showUrlChange(text, warn) {
+  urlChangeText.textContent = text;
+  urlChange.classList.toggle("warn", warn);
+  urlChangeError.classList.add("hidden");
+  urlChange.classList.remove("hidden");
+}
+
+// Affichée d'office quand la page est introuvable sur le site ; sinon, seulement depuis le menu.
+function renderUrlChange(s) {
+  urlChangeInput.value = "";
+  if (s.missing_since) {
+    const since = new Date(s.missing_since.replace(" ", "T") + "Z").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+    showUrlChange(`⚠ Page introuvable sur scan-manga depuis le ${since}. La série a peut-être changé d'adresse. ${URL_CHANGE_HELP}`, true);
+  } else {
+    urlChange.classList.add("hidden");
+  }
+}
+
+document.getElementById("change-url-menu-btn").addEventListener("click", () => {
+  showUrlChange(URL_CHANGE_HELP, false);
+  urlChangeInput.focus();
+});
+
+urlChangeBtn.addEventListener("click", async () => {
+  const url = urlChangeInput.value.trim();
+  if (!url) return;
+  urlChangeBtn.disabled = true;
+  urlChangeBtn.textContent = "Vérification…";
+  urlChangeError.classList.add("hidden");
+  try {
+    const res = await fetch(`/api/series/${currentSeriesId}/url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Adresse refusée");
+    await loadSeriesDetail();
+    await loadChapters();
+    const n = (data.new_chapters || []).length;
+    alert(`Adresse mise à jour.${n ? ` ${n} nouveau${n > 1 ? "x" : ""} chapitre${n > 1 ? "s" : ""}.` : ""}`);
+  } catch (e) {
+    urlChangeError.textContent = "⚠ " + e.message;
+    urlChangeError.classList.remove("hidden");
+  } finally {
+    urlChangeBtn.disabled = false;
+    urlChangeBtn.textContent = "Remplacer";
+  }
+});

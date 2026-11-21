@@ -13,6 +13,9 @@ Simples requêtes HTTP, avec un User-Agent honnête : aucun navigateur automatis
 - Pour tout le serveur : **45 à 90 s entre deux requêtes** et **300 requêtes par jour au plus**.
 - Si le site refuse (403, 429, page de protection), **tout s'arrête** : pause de 2 h, puis 6 h, 24 h et 72 h.
   La pause est visible et peut être levée dans **Réglages › Mises à jour**, où l'on peut aussi tout couper.
+- Une fiche **déplacée** sur le site (redirection) prend sa nouvelle adresse toute seule. Une fiche **introuvable**
+  est signalée sur sa page, revue toutes les 48 h, et sa nouvelle adresse peut être collée à la main
+  (menu ⋮ › Changer l'adresse) : chapitres lus et historique sont gardés.
 
 ## Installation (Debian, en root)
 
@@ -100,7 +103,8 @@ Ces copies sont sur le même disque que la base : garde aussi un export ailleurs
   `backup.py`, `storage.py`, `scrape_cache.py`.
 - `static/` : `index.html`, `style.css` et `js/`, un fichier par écran chargé dans l'ordre par `index.html`
   (`core.js` d'abord, `main.js` en dernier). Pas d'étape de compilation.
-- `tests/` : `python -m pytest -q`. Aucune requête vers le site ni vers AniList ; une vraie fiche du site sert de
+- `tests/` : `python -m pytest -q`, lancés aussi par GitHub à chaque envoi (`.github/workflows/tests.yml`, mail en cas
+  d'échec). Aucune requête vers le site ni vers AniList ; une vraie fiche du site sert de
   référence (`tests/fixtures/`). Si le site change de structure, enregistre une nouvelle fiche à la place.
 - `outils/` : `maj.sh`, `deploy.sh`, le service systemd et `test_fiche.py`.
 - Une instance = **un seul processus** : les vérifications sont planifiées dans l'appli et partiraient en double

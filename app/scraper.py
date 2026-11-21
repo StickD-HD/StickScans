@@ -10,6 +10,7 @@ pour toutes les instances du serveur à la fois.
 Garde aussi un état de progression en mémoire, consultable via get_progress().
 """
 import logging
+import sqlite3
 import threading
 import time
 from contextlib import contextmanager
@@ -18,7 +19,7 @@ from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
 
 from . import database, fetcher, schedule, scrape_cache, site_guard
-from .fetcher import BlockedError, SiteBusy, fetch_html, format_wait
+from .fetcher import BlockedError, PageNotFound, SiteBusy, fetch_html, fetch_page, format_wait
 from .parse_series import parse_series_page
 
 SCAN_MANGA_HOSTS = {"scan-manga.com", "www.scan-manga.com", "m.scan-manga.com"}
@@ -119,10 +120,12 @@ def _set_progress(**kwargs):
         _progress.update(kwargs)
 
 
-def plan_next(series: dict, ok: bool, now: datetime | None = None) -> None:
+def plan_next(series: dict, ok: bool, now: datetime | None = None, missing: bool = False) -> None:
     """Planifie la prochaine vérification automatique d'une série qui vient d'être vérifiée (ou ajoutée)."""
     now = now or utc_now()
-    if ok:
+    if missing:
+        hours, reason = schedule.MISSING_HOURS, "missing"
+    elif ok:
         added_at = database.parse_utc(series["added_at"]) if series.get("added_at") else now
         hours, reason = schedule.interval(database.get_discovery_times(series["id"]), added_at, now)
     else:
@@ -141,6 +144,8 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: 
     new_numbers: list[str] = []
     error = None
     paused = False
+    missing = False
+    moved_to = None
     source = "site"
     cache_age = 0.0
     try:
@@ -150,8 +155,9 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: 
             if cached:
                 html, cache_age = cached
                 source = "cache"
+        final_url = series["url"]
         if html is None:
-            html = fetch_html(series["url"], max_wait=max_wait)
+            html, final_url = fetch_page(series["url"], max_wait=max_wait)
         try:
             parsed = parse_series_page(html)
         except Exception:
@@ -159,21 +165,27 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: 
                 raise
             # copie illisible : on retente avec la vraie page du site
             source = "site"
-            html = fetch_html(series["url"], max_wait=max_wait)
+            html, final_url = fetch_page(series["url"], max_wait=max_wait)
             parsed = parse_series_page(html)
+        moved_to = _follow_redirect(series, final_url)
         title = parsed.get("title") or title
         new_numbers = [c["number"] for c in database.update_series_result(series["id"], parsed)]
         if source == "site":
-            scrape_cache.write(series["url"], html)  # sans effet hors des modes « write » et « both »
+            scrape_cache.write(moved_to or series["url"], html)  # sans effet hors des modes « write » et « both »
     except Exception as e:  # une série en échec (réseau, page illisible) ne doit pas bloquer les autres
         error = str(e) or e.__class__.__name__
         paused = isinstance(e, (BlockedError, SiteBusy))
+        missing = isinstance(e, PageNotFound)
         if not paused:
             database.update_series_error(series["id"], error)
+        if missing:
+            database.set_series_missing(series["id"])
     duration = time.monotonic() - started
 
     if not paused:
-        plan_next(series, ok=error is None)
+        plan_next(series, ok=error is None, missing=missing)
+    if moved_to:
+        checks_log.info("ADRESSE  %s — la fiche a changé d'adresse sur le site : %s", title, moved_to)
 
     if error:
         checks_log.error("%s %7s  %s — %s", "PAUSE   " if paused else "ERREUR  ", format_duration(duration), title, error)
@@ -191,6 +203,38 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: 
                                 "pause" if paused else source)
     return {"ok": error is None, "duration": duration, "new": len(new_numbers), "source": source,
             "blocked": paused, "error": error}
+
+
+def _follow_redirect(series: dict, final_url: str) -> str | None:
+    """Le site a redirigé vers une autre fiche (série déplacée) : la série prend sa nouvelle adresse, avec sa
+    progression. Renvoie la nouvelle adresse, ou None s'il n'y a rien à changer (ou si une autre série l'a déjà)."""
+    new_url = normalize_series_url(final_url)
+    if not new_url or new_url == series["url"]:
+        return None
+    try:
+        database.update_series_url(series["id"], new_url)
+    except sqlite3.IntegrityError:
+        logger.warning("%s redirige vers %s, déjà suivie par une autre série : adresse gardée", series["url"], new_url)
+        return None
+    return new_url
+
+
+def change_series_url(series: dict, url: str) -> dict:
+    """« Changer l'adresse » d'une fiche : lit la nouvelle page, puis remplace l'adresse et met la série à jour en
+    gardant chapitres lus et historique (les chapitres sont reconnus par leur numéro). Renvoie les nouveaux chapitres.
+    Erreurs : FetchError (page illisible ou introuvable), ValueError (pas une fiche), sqlite3.IntegrityError (adresse
+    déjà suivie)."""
+    html, final_url = fetch_page(url)
+    parsed = parse_series_page(html)
+    if not parsed.get("title"):
+        raise ValueError("Cette page n'est pas une fiche de série")
+    new_url = normalize_series_url(final_url) or url
+    database.update_series_url(series["id"], new_url)
+    new = database.update_series_result(series["id"], parsed)
+    checks_log.info("ADRESSE  %s — nouvelle adresse donnée à la main : %s", parsed.get("title"), new_url)
+    plan_next(database.get_series_by_id(series["id"]), ok=True)
+    scrape_cache.write(new_url, html)
+    return {"new_chapters": [c["number"] for c in new]}
 
 
 def check_one_series(series: dict) -> dict:

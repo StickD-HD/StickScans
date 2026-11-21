@@ -4,7 +4,7 @@ from fastapi import BackgroundTasks, HTTPException
 from pydantic import ValidationError
 
 from app import anilist, main, scraper
-from conftest import make_parsed, site_chapter
+from conftest import as_page, make_parsed, site_chapter
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ def test_optimisation_refusee_pendant_une_verification(db, check_running):
 
 
 def test_aucune_verification_pendant_une_restauration(db, series_id, monkeypatch):
-    monkeypatch.setattr(scraper, "fetch_html", lambda *a, **k: pytest.fail("aucune requête pendant la maintenance"))
+    monkeypatch.setattr(scraper, "fetch_page", as_page(lambda *a, **k: pytest.fail("aucune requête pendant la maintenance")))
     with scraper.maintenance():
         scraper.run_due_checks()
         scraper.check_all_series("manuel")
@@ -90,3 +90,11 @@ def test_ecran_verifications(db, series_id):
     assert data["queue"][0]["reason"] == "window" and data["queue"][1]["skipped"] == "terminée"
     assert len(data["history"]["per_day"]) == 7 and data["errors"] == []
     assert data["site"]["auto_enabled"] is True
+
+
+def test_changer_l_adresse_refus(db, series_id):
+    db.insert_series("https://www.scan-manga.com/autre.html", make_parsed([site_chapter(1)], title="Autre"))
+    for url, code in (("https://exemple.fr/serie.html", 400), ("https://www.scan-manga.com/autre.html", 409)):
+        with pytest.raises(HTTPException) as info:
+            main.change_url(series_id, main.ChangeUrlRequest(url=url))
+        assert info.value.status_code == code

@@ -118,6 +118,7 @@ NEW_SERIES_COLUMNS = {
     "anilist_cover_url": "TEXT",
     "anilist_notes": "TEXT",
     "platform": "TEXT",        # plateforme officielle qui publie la série (ex. Webtoons)
+    "missing_since": "TEXT",   # fiche introuvable sur le site depuis cette date (UTC) ; vide = page trouvée
     "next_check_at": "TEXT",   # prochaine vérification automatique (UTC) ; vide = dès que possible
     "check_reason": "TEXT",    # raison de cet intervalle (voir schedule.REASONS)
 }
@@ -492,6 +493,7 @@ def update_series_result(series_id: int, parsed: dict) -> list[dict]:
             "status = ?", "last_chapter_number = ?", "last_chapter_url = ?", "alt_names = ?",
             "synopsis = ?", "author = ?", "year = ?", "editor = ?", "team = ?", "platform = ?",
             "popularity = ?", "category = ?", "last_checked_at = datetime('now')", "last_error = NULL",
+            "missing_since = NULL",
         ]
         params = [
             parsed.get("status"), parsed.get("last_chapter_number"), parsed.get("last_chapter_url"), alt_names_str,
@@ -523,8 +525,8 @@ def _upsert_chapters(conn, series_id: int, chapters: list[dict], is_initial: boo
     row = conn.execute("SELECT chapter_list_synced FROM series WHERE id = ?", (series_id,)).fetchone()
     already_synced = bool(row["chapter_list_synced"]) if row else False
     stored = {
-        r["number"]: r["link_type"] or "site"
-        for r in conn.execute("SELECT number, link_type FROM chapters WHERE series_id = ?", (series_id,))
+        r["number"]: (r["link_type"] or "site", r["url"] or "")
+        for r in conn.execute("SELECT number, link_type, url FROM chapters WHERE series_id = ?", (series_id,))
     }
     frontier = conn.execute("SELECT MAX(number_float) FROM chapters WHERE series_id = ?", (series_id,)).fetchone()[0]
 
@@ -536,8 +538,12 @@ def _upsert_chapters(conn, series_id: int, chapters: list[dict], is_initial: boo
         number_float = number_to_float(number)
 
         if number in stored:
-            # Un lien de meilleure qualité est apparu (ex. le chapitre devient lisible sur scan-manga) : on le garde
-            if LINK_RANK.get(link_type, 0) > LINK_RANK.get(stored[number], 0):
+            old_type, old_url = stored[number]
+            # Un lien de meilleure qualité est apparu (ex. le chapitre devient lisible sur scan-manga), ou le lien de
+            # lecture a changé d'adresse (série déplacée sur le site) : on garde le nouveau. L'état lu/non lu reste.
+            better = LINK_RANK.get(link_type, 0) > LINK_RANK.get(old_type, 0)
+            moved = link_type == old_type == "site" and url and url != old_url
+            if better or moved:
                 conn.execute(
                     "UPDATE chapters SET url = ?, link_type = ? WHERE series_id = ? AND number = ?",
                     (url, link_type, series_id, number),
@@ -557,6 +563,18 @@ def _upsert_chapters(conn, series_id: int, chapters: list[dict], is_initial: boo
 
     conn.execute("UPDATE series SET chapter_list_synced = 1 WHERE id = ?", (series_id,))
     return new_chapters
+
+
+def set_series_missing(series_id: int):
+    """La fiche est introuvable : on note depuis quand (la date de la première fois est gardée)."""
+    with get_conn() as conn:
+        conn.execute("UPDATE series SET missing_since = COALESCE(missing_since, datetime('now')) WHERE id = ?", (series_id,))
+
+
+def update_series_url(series_id: int, url: str):
+    """Nouvelle adresse de la fiche. sqlite3.IntegrityError si une autre série a déjà cette adresse."""
+    with get_conn() as conn:
+        conn.execute("UPDATE series SET url = ? WHERE id = ?", (url, series_id))
 
 
 def update_series_error(series_id: int, error: str):

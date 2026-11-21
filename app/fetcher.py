@@ -42,6 +42,10 @@ class BlockedError(FetchError):
     """Aucune requête ne doit partir : le site a refusé (ou la pause qui suit un refus est en cours)."""
 
 
+class PageNotFound(FetchError):
+    """La fiche n'existe plus à cette adresse (404/410, ou redirection vers une page qui n'est pas une fiche)."""
+
+
 class QuotaReached(BlockedError):
     """Plafond quotidien de requêtes atteint : on reprend le lendemain."""
 
@@ -95,6 +99,11 @@ def _wait_for_slot(max_wait: float) -> None:
 
 def fetch_html(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float | None = None) -> str:
     """max_wait : attente maximale (en secondes) de son tour avant d'envoyer la requête."""
+    return fetch_page(url, timeout_ms, max_wait)[0]
+
+
+def fetch_page(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float | None = None) -> tuple[str, str]:
+    """Comme fetch_html, mais renvoie aussi l'adresse finale (différente de url si le site a redirigé)."""
     _wait_for_slot(site_guard.MAX_GAP_SECONDS + 15 if max_wait is None else max_wait)
     try:
         resp = _session.get(url, timeout=(10, min(timeout_ms, DEFAULT_TIMEOUT_MS) / 1000))
@@ -106,8 +115,8 @@ def fetch_html(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float |
         raise BlockedError(
             f"HTTP {resp.status_code} : le site refuse les requêtes, pause de {format_wait(pause)} (aucun contournement tenté)"
         )
-    if resp.status_code == 404:
-        raise FetchError("HTTP 404 : fiche introuvable (URL changée ?)")
+    if resp.status_code in (404, 410):
+        raise PageNotFound(f"HTTP {resp.status_code} : fiche introuvable (adresse changée ?)")
     if resp.status_code != 200:
         raise FetchError(f"HTTP {resp.status_code}")
 
@@ -117,5 +126,7 @@ def fetch_html(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float |
         raise BlockedError(f"Page de protection reçue : pause de {format_wait(pause)} (aucun contournement tenté)")
     site_guard.record_success()
     if not READY_RE.search(html):
+        if resp.history:  # redirigé vers une page qui n'est pas une fiche (accueil, recherche...)
+            raise PageNotFound(f"Redirigé vers {resp.url} : la fiche n'existe plus à cette adresse")
         raise FetchError(f"Page reçue ({len(html)} octets) sans titre de série : structure du site changée ?")
-    return html
+    return html, resp.url

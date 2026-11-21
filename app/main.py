@@ -175,6 +175,10 @@ class AddSeriesRequest(BaseModel):
     category_ids: list[int] = []
 
 
+class ChangeUrlRequest(BaseModel):
+    url: str
+
+
 class MarkReadUpToRequest(BaseModel):
     number: str
 
@@ -380,6 +384,29 @@ def add_series(payload: AddSeriesRequest):
     series = database.get_series_by_id(series_id)
     plan_next(series, ok=True)  # la page vient d'être lue : inutile de la redemander tout de suite
     return database.get_series_by_id(series_id)
+
+
+@app.post("/api/series/{series_id}/url")
+def change_url(series_id: int, payload: ChangeUrlRequest):
+    """Nouvelle adresse pour une fiche déplacée sur le site : chapitres lus et historique sont gardés."""
+    series = database.get_series_by_id(series_id)
+    if not series:
+        raise HTTPException(404, "Série introuvable")
+    url = normalize_series_url(payload.url)
+    if not url:
+        raise HTTPException(400, "L'adresse doit être une page série de scan-manga.com")
+    other = database.get_series_by_url(url)
+    if other and other["id"] != series_id:
+        raise HTTPException(409, f"Cette adresse est déjà celle de « {other.get('title') or url} » dans ta bibliothèque")
+    try:
+        result = scraper_module.change_series_url(series, url)
+    except FetchError as e:
+        raise HTTPException(502, f"Nouvelle adresse illisible : {e}")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except sqlite3.IntegrityError:
+        raise HTTPException(409, "Cette adresse est déjà suivie par une autre série")
+    return {**database.get_series_by_id(series_id), **result}
 
 
 @app.post("/api/series/refresh-all")

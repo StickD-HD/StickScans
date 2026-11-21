@@ -76,3 +76,10 @@ def site_chapter(number) -> dict:
 
 def nolink_chapter(number) -> dict:
     return {"number": str(number), "url": "", "link_type": "aucun"}
+
+
+def as_page(fake_fetch_html):
+    """Adapte un faux fetch_html (url -> html) en faux fetch_page (url -> (html, adresse finale sans redirection))."""
+    def fake_fetch_page(url, *args, **kwargs):
+        return fake_fetch_html(url, *args, **kwargs), url
+    return fake_fetch_page

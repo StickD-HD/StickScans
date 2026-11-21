@@ -79,10 +79,12 @@ def test_etat_enregistre_sur_disque(guard):
 # --- fetcher ---
 
 class FakeResponse:
-    def __init__(self, status, text="", headers=None):
+    def __init__(self, status, text="", headers=None, url="https://www.scan-manga.com/a.html", redirected=False):
         self.status_code = status
         self.content = text.encode()
         self.headers = headers or {}
+        self.url = url
+        self.history = [object()] if redirected else []
 
 
 @pytest.fixture
@@ -173,3 +175,24 @@ def test_historique_des_requetes_et_des_refus(guard):
     assert [x["count"] for x in h["per_day"]] == [0, 2, 1]
     assert h["blocks"][0]["reason"] == "HTTP 429" and h["blocks"][0]["strike"] == 1
     assert h["blocks"][0]["seconds"] == 2 * 3600
+
+
+def test_fiche_disparue(no_gap, monkeypatch):
+    monkeypatch.setattr(fetcher._session, "get", lambda url, **kw: FakeResponse(404))
+    with pytest.raises(fetcher.PageNotFound):
+        fetcher.fetch_html("https://www.scan-manga.com/a.html")
+    assert not site_guard.status()["blocked"]  # une page disparue n'est pas un refus du site
+
+
+def test_redirection_vers_une_page_qui_n_est_pas_une_fiche(no_gap, monkeypatch):
+    monkeypatch.setattr(fetcher._session, "get", lambda url, **kw: FakeResponse(
+        200, "<html>Accueil</html>", url="https://www.scan-manga.com/", redirected=True))
+    with pytest.raises(fetcher.PageNotFound, match="Redirigé"):
+        fetcher.fetch_html("https://www.scan-manga.com/a.html")
+
+
+def test_redirection_vers_la_nouvelle_adresse(no_gap, monkeypatch, series_html):
+    monkeypatch.setattr(fetcher._session, "get", lambda url, **kw: FakeResponse(
+        200, series_html, url="https://www.scan-manga.com/nouvelle-adresse.html", redirected=True))
+    html, final = fetcher.fetch_page("https://www.scan-manga.com/a.html")
+    assert html == series_html and final == "https://www.scan-manga.com/nouvelle-adresse.html"

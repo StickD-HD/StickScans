@@ -5,7 +5,7 @@ import pytest
 
 from app import scraper, site_guard
 from app.fetcher import BlockedError, QuotaReached
-from conftest import make_parsed, site_chapter
+from conftest import as_page, make_parsed, site_chapter
 
 ALL_OFF = {"skip_completed": False, "skip_unread": False, "skip_never_read": False}
 
@@ -38,7 +38,7 @@ def fetched(monkeypatch, series_html):
         calls.append(url)
         return series_html
 
-    monkeypatch.setattr(scraper, "fetch_html", fake)
+    monkeypatch.setattr(scraper, "fetch_page", as_page(fake))
     return calls
 
 
@@ -50,7 +50,7 @@ def test_blocage_du_site_arrete_la_verification(db, monkeypatch):
         calls.append(url)
         raise BlockedError("HTTP 403")
 
-    monkeypatch.setattr(scraper, "fetch_html", blocked)
+    monkeypatch.setattr(scraper, "fetch_page", as_page(blocked))
     scraper.check_all_series("manuel")
 
     assert len(calls) == 1  # aucune autre série n'est demandée après un refus
@@ -62,7 +62,7 @@ def test_blocage_du_site_arrete_la_verification(db, monkeypatch):
 
 def test_plafond_atteint_arrete_aussi(db, monkeypatch):
     _two_series(db)
-    monkeypatch.setattr(scraper, "fetch_html", lambda *a, **k: (_ for _ in ()).throw(QuotaReached("limite")))
+    monkeypatch.setattr(scraper, "fetch_page", as_page(lambda *a, **k: (_ for _ in ()).throw(QuotaReached("limite"))))
     scraper.check_all_series("manuel")
     assert db.list_check_runs()[0]["status"] == "interrompue"
 
@@ -85,7 +85,7 @@ def test_verification_complete_et_planification(db, fetched):
 def test_page_illisible_n_ecrase_rien(db, monkeypatch, series_html):
     a, _ = _two_series(db)
     truncated = series_html.replace('class="contenu_texte_fiche_technique"', 'class="autre_chose"')
-    monkeypatch.setattr(scraper, "fetch_html", lambda url, *a, **k: truncated)
+    monkeypatch.setattr(scraper, "fetch_page", as_page(lambda url, *a, **k: truncated))
     scraper.check_all_series("manuel")
 
     s = db.get_series_by_id(a)
@@ -120,7 +120,7 @@ def test_rien_pendant_une_pause_du_site(db, fetched):
 
 def test_actualiser_une_serie_pendant_une_pause(db, monkeypatch):
     a, _ = _two_series(db)
-    monkeypatch.setattr(scraper, "fetch_html", lambda *a, **k: (_ for _ in ()).throw(BlockedError("Site en pause")))
+    monkeypatch.setattr(scraper, "fetch_page", as_page(lambda *a, **k: (_ for _ in ()).throw(BlockedError("Site en pause"))))
     result = scraper.check_one_series(db.get_series_by_id(a))
     assert result["check_error"] == "Site en pause"
     assert result["last_error"] is None  # pas de pastille d'erreur sur la série pour autant
@@ -135,10 +135,76 @@ def test_ajout_planifie_la_premiere_verification(db):
 
 def test_une_pause_n_est_pas_une_erreur_de_serie(db, monkeypatch):
     a, b = _two_series(db)
-    monkeypatch.setattr(scraper, "fetch_html", lambda url, *a, **k: (_ for _ in ()).throw(
-        BlockedError("HTTP 403") if url.endswith("a.html") else ValueError("page illisible")))
+    monkeypatch.setattr(scraper, "fetch_page", as_page(lambda url, *a, **k: (_ for _ in ()).throw(
+        BlockedError("HTTP 403") if url.endswith("a.html") else ValueError("page illisible"))))
     scraper.check_one_series(db.get_series_by_id(b))  # vraie erreur de la série B
     scraper.check_one_series(db.get_series_by_id(a))  # pause du site pendant la vérification de A
     errors = db.get_recent_check_errors()
     assert [e["series_title"] for e in errors] == ["B"]
     assert errors[0]["error"] == "page illisible"
+
+
+# --- Fiches déplacées ou disparues ---
+
+from app.fetcher import PageNotFound  # noqa: E402
+
+
+def _read_some(db, sid):
+    db.mark_read_up_to(sid, 1.0)
+
+
+def test_fiche_disparue_marquee_et_revue_moins_souvent(db, monkeypatch, series_html):
+    a, _ = _two_series(db)
+    monkeypatch.setattr(scraper, "fetch_page", lambda url, *a, **k: (_ for _ in ()).throw(PageNotFound("HTTP 404")))
+    scraper.check_one_series(db.get_series_by_id(a))
+    s = db.get_series_by_id(a)
+    assert s["missing_since"] is not None and s["check_reason"] == "missing"
+    delay = db.parse_utc(s["next_check_at"]) - scraper.utc_now()
+    assert delay > timedelta(hours=40)  # 48 h ± 10 %
+    first_seen = s["missing_since"]
+    scraper.check_one_series(db.get_series_by_id(a))
+    assert db.get_series_by_id(a)["missing_since"] == first_seen  # la date de la première fois est gardée
+    # La page revient : plus rien de signalé
+    monkeypatch.setattr(scraper, "fetch_page", as_page(lambda url, *a, **k: series_html))
+    scraper.check_one_series(db.get_series_by_id(a))
+    s = db.get_series_by_id(a)
+    assert s["missing_since"] is None and s["last_error"] is None
+
+
+def test_le_site_redirige_vers_la_nouvelle_adresse(db, monkeypatch, series_html):
+    a, _ = _two_series(db)
+    _read_some(db, a)
+    monkeypatch.setattr(scraper, "fetch_page", lambda url, *a, **k: (series_html, "https://m.scan-manga.com/nouvelle.html"))
+    scraper.check_one_series(db.get_series_by_id(a))
+    s = db.get_series_by_id(a)
+    assert s["url"] == "https://www.scan-manga.com/nouvelle.html"
+    assert db.get_reading_history()  # progression gardée
+
+
+def test_redirection_vers_une_serie_deja_suivie(db, monkeypatch, series_html):
+    a, _ = _two_series(db)
+    monkeypatch.setattr(scraper, "fetch_page", lambda url, *a, **k: (series_html, "https://www.scan-manga.com/b.html"))
+    scraper.check_one_series(db.get_series_by_id(a))
+    assert db.get_series_by_id(a)["url"] == "https://www.scan-manga.com/a.html"  # adresse gardée, pas de doublon
+
+
+def test_changer_l_adresse_a_la_main(db, monkeypatch, series_html):
+    from app.parse_series import parse_series_page
+    sid = db.insert_series("https://www.scan-manga.com/serie-test.html", parse_series_page(series_html))
+    db.mark_read_up_to(sid, 11.5)
+    db.set_series_missing(sid)
+    # Même série à une nouvelle adresse : les liens de lecture ont changé, et un chapitre 13 est sorti.
+    new_html = series_html.replace("Serie-Test-Chapitre-12-FR_501", "Serie-Test-V2-Chapitre-12-FR_901").replace(
+        '<li class="chapitre">', '<li class="chapitre"><div class="chapitre_nom">Chapitre 13</div>'
+        '<a href="https://www.scan-manga.com/lecture-en-ligne/Serie-Test-V2-Chapitre-13-FR_902.html">Lire</a></li>'
+        '<li class="chapitre">', 1)
+    monkeypatch.setattr(scraper, "fetch_page", lambda url, *a, **k: (new_html, url))
+    result = scraper.change_series_url(db.get_series_by_id(sid), "https://www.scan-manga.com/serie-test-v2.html")
+
+    s = db.get_series_by_id(sid)
+    assert s["url"] == "https://www.scan-manga.com/serie-test-v2.html" and s["missing_since"] is None
+    chapters = {c["number"]: c for c in db.get_chapters_for_series(sid)}
+    assert chapters["11.5"]["is_read"] == 1 and chapters["12"]["is_read"] == 0   # progression gardée
+    assert "V2-Chapitre-12-FR_901" in chapters["12"]["url"]                      # lien d'un chapitre existant mis à jour
+    assert result["new_chapters"] == ["13"]                                      # seul le vrai nouveau chapitre
+    assert [h["number"] for h in db.get_reading_history()] == ["11.5"]           # historique intact

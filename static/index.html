@@ -407,6 +407,7 @@
           <button id="category-menu-btn" type="button" role="menuitem">🏷 Modifier la catégorie</button>
           <button id="recheck-series-btn" type="button" role="menuitem">↻ Actualiser</button>
           <button id="reset-progress-btn" type="button" role="menuitem">⟲ Réinitialiser la progression</button>
+          <button id="change-url-menu-btn" type="button" role="menuitem">🔗 Changer l'adresse</button>
           <a id="detail-source-link" target="_blank" rel="noopener" role="menuitem">🌐 Ouvrir sur le web</a>
           <button id="remove-series-btn" class="danger-item" type="button" role="menuitem">🗑 Retirer de la bibliothèque</button>
         </div>
@@ -431,6 +432,15 @@
         <button id="anilist-action-btn">🔗 AniList</button>
         <button id="library-btn" type="button" title="Retirer de la bibliothèque">✓ Dans la bibliothèque</button>
         <a id="detail-source-btn" class="action-btn-link" target="_blank" rel="noopener">🌐 Scan-Manga</a>
+      </div>
+
+      <div id="url-change" class="hidden">
+        <p id="url-change-text"></p>
+        <div class="url-change-row">
+          <input id="url-change-input" type="url" placeholder="https://www.scan-manga.com/..." autocapitalize="off" spellcheck="false">
+          <button id="url-change-btn" type="button">Remplacer</button>
+        </div>
+        <p id="url-change-error" class="error hidden"></p>
       </div>
 
       <div id="anilist-align-banner" class="hidden">

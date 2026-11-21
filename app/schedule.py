@@ -19,6 +19,7 @@ WINDOW_HOURS = 3
 NORMAL_HOURS = 12
 DORMANT_HOURS = 48
 ERROR_HOURS = 6
+MISSING_HOURS = 48  # page introuvable : inutile d'insister, on revérifie de temps en temps
 DEFAULT_CADENCE_DAYS = 7.0
 MIN_CADENCE_DAYS = 1.0
 MAX_CADENCE_DAYS = 30.0
@@ -31,6 +32,7 @@ REASONS = {
     "late": "sortie en retard",
     "dormant": "série probablement en pause",
     "error": "après une erreur",
+    "missing": "page introuvable",
 }
 
 
