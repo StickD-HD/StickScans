@@ -17,6 +17,14 @@ _originalFetch("/api/auth/status")
   .then((r) => r.json())
   .then((status) => { if (status.enabled && authSection) authSection.classList.remove("hidden"); })
   .catch(() => {});
+const logoutOthersBtn = document.getElementById("logout-others-btn");
+if (logoutOthersBtn) {
+  logoutOthersBtn.addEventListener("click", async () => {
+    if (!confirm("Déconnecter tous les autres appareils ? Ils devront se reconnecter avec le mot de passe. Cet appareil reste connecté.")) return;
+    const res = await _originalFetch("/api/auth/logout-others", { method: "POST" });
+    alert(res.ok ? "Les autres appareils sont déconnectés." : "Échec : réessaie.");
+  });
+}
 if (logoutBtn) {
   logoutBtn.addEventListener("click", async () => {
     await _originalFetch("/api/auth/logout", { method: "POST" });

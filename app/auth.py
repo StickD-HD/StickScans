@@ -55,7 +55,7 @@ PUBLIC_PATHS = {
     "/static/style.css",
     "/static/login.js",
 }
-PUBLIC_PREFIXES = ("/static/icons/",)
+PUBLIC_PREFIXES = ("/static/icons/", "/static/fonts/")
 
 
 def client_ip(request) -> str:
@@ -113,6 +113,44 @@ def _sign(payload: str) -> str:
     return _b64e(hmac.new(_SECRET, payload.encode(), hashlib.sha256).digest())
 
 
+# --- Génération des sessions : « Déconnecter les autres appareils » l'augmente, ce qui invalide d'un coup toutes
+# les sessions émises avant. Stockée dans la base (app_settings) ; gardée en mémoire pour ne pas relire la base à
+# chaque requête. Les sessions émises avant l'existence de ce mécanisme valent génération 0.
+GENERATION_KEY = "auth_session_generation"
+_generation_cache: tuple[str, int] | None = None
+_generation_lock = threading.Lock()
+
+
+def current_generation() -> int:
+    global _generation_cache
+    from . import database
+    path = str(database.DB_PATH)
+    with _generation_lock:
+        if _generation_cache is None or _generation_cache[0] != path:
+            try:
+                value = int(database.get_setting(GENERATION_KEY) or 0)
+            except Exception:  # base absente ou valeur illisible : génération de départ
+                value = 0
+            _generation_cache = (path, value)
+        return _generation_cache[1]
+
+
+def forget_generation_cache() -> None:
+    """À appeler quand la base est remplacée (import, restauration)."""
+    global _generation_cache
+    with _generation_lock:
+        _generation_cache = None
+
+
+def revoke_all_sessions() -> int:
+    """Invalide toutes les sessions existantes ; renvoie la nouvelle génération."""
+    from . import database
+    new = current_generation() + 1
+    database.set_setting(GENERATION_KEY, str(new))
+    forget_generation_cache()
+    return new
+
+
 def check_credentials(username: str, password: str) -> bool:
     # On compare des empreintes pour que la durée du test ne dépende pas de la longueur.
     def digest(value: str) -> bytes:
@@ -124,7 +162,8 @@ def check_credentials(username: str, password: str) -> bool:
 
 
 def create_session_token() -> str:
-    payload = _b64e(json.dumps({"u": AUTH_USERNAME, "exp": int(time.time()) + SESSION_DAYS * 86400}).encode())
+    payload = _b64e(json.dumps({"u": AUTH_USERNAME, "exp": int(time.time()) + SESSION_DAYS * 86400,
+                                "g": current_generation()}).encode())
     return f"{payload}.{_sign(payload)}"
 
 
@@ -138,7 +177,8 @@ def verify_session_token(token: str | None) -> bool:
         data = json.loads(_b64d(payload))
     except (ValueError, json.JSONDecodeError):
         return False
-    return data.get("u") == AUTH_USERNAME and data.get("exp", 0) > time.time()
+    return (data.get("u") == AUTH_USERNAME and data.get("exp", 0) > time.time()
+            and data.get("g", 0) == current_generation())
 
 
 def safe_next_url(next_url: str | None) -> str:

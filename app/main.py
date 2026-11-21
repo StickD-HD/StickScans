@@ -125,8 +125,8 @@ async def require_auth(request: Request, call_next):
 CONTENT_SECURITY_POLICY = "; ".join([
     "default-src 'self'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
     "img-src 'self' https: data:",
     "connect-src 'self'",
     "manifest-src 'self'",
@@ -238,6 +238,11 @@ def login(payload: LoginRequest, request: Request, response: Response):
         logger.warning("Échec de connexion depuis %s", ip)
         raise HTTPException(401, "Identifiant ou mot de passe incorrect")
     auth.clear_failures(ip)
+    _set_session_cookie(response, request)
+    return {"ok": True, "next": auth.safe_next_url(payload.next)}
+
+
+def _set_session_cookie(response: Response, request: Request):
     response.set_cookie(
         auth.COOKIE_NAME,
         auth.create_session_token(),
@@ -247,12 +252,22 @@ def login(payload: LoginRequest, request: Request, response: Response):
         secure=auth.COOKIE_SECURE or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https" or request.url.scheme == "https",
         path="/",
     )
-    return {"ok": True, "next": auth.safe_next_url(payload.next)}
 
 
 @app.post("/api/auth/logout")
 def logout(response: Response):
     response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@app.post("/api/auth/logout-others")
+def logout_others(request: Request, response: Response):
+    """Déconnecte tous les autres appareils (téléphone perdu, ordinateur prêté...) ; celui-ci reste connecté."""
+    if not auth.is_enabled():
+        raise HTTPException(400, "Pas d'authentification configurée")
+    auth.revoke_all_sessions()
+    _set_session_cookie(response, request)  # nouvelle session pour cet appareil, de la nouvelle génération
+    logger.warning("Toutes les autres sessions ont été déconnectées (depuis %s)", auth.client_ip(request))
     return {"ok": True}
 
 
@@ -433,6 +448,7 @@ def import_database(file: UploadFile = File(...)):
         with maintenance():
             safe = replace_database(tmp_path)
             database.init_db()
+            auth.forget_generation_cache()
     except ValueError as e:
         raise HTTPException(400, str(e))
     except RuntimeError as e:
@@ -721,6 +737,7 @@ def restore_backup(name: str):
         with _exclusive():
             safe = backup_files.restore_backup(name)
             database.init_db()  # met le schéma à niveau si la sauvegarde vient d'une version plus ancienne
+            auth.forget_generation_cache()
     except ValueError as e:
         raise HTTPException(400, str(e))
     except FileNotFoundError:
