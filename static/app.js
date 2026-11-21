@@ -1015,6 +1015,7 @@ async function loadSeriesDetail() {
   detailAuthor.textContent = s.author ? "Auteur : " + s.author : "";
   detailEditor.textContent = s.editor ? "Éditeur : " + s.editor : "";
   detailTeam.textContent = s.team ? "Team trad : " + s.team : "";
+  document.getElementById("detail-platform").textContent = s.platform ? "Plateforme officielle : " + s.platform : "";
   detailNextCheck.textContent = s.next_check_at
     ? `Prochaine vérification : ${formatFuture(s.next_check_at)}${CHECK_REASON_LABELS[s.check_reason] ? " (" + CHECK_REASON_LABELS[s.check_reason] + ")" : ""}`
     : "Prochaine vérification : dès que possible";

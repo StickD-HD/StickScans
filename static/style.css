@@ -300,7 +300,7 @@ main#library { padding: 0 18px; }
 #detail-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 #detail-info h1 { font-size: 1.15rem; margin: 0 0 2px; }
 
-#detail-meta, #detail-author, #detail-editor, #detail-team { font-size: 0.78rem; color: var(--muted); }
+#detail-meta, #detail-author, #detail-editor, #detail-team, #detail-platform { font-size: 0.78rem; color: var(--muted); }
 
 /* --- Rangée d'actions : AniList / Catégorie / Source --- */
 #detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }

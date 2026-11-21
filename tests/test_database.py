@@ -150,3 +150,10 @@ def test_reglages_mises_a_jour(db):
     assert db.get_update_settings() == {"skip_completed": True, "skip_unread": False, "skip_never_read": False}
     db.set_update_settings({"skip_unread": True, "skip_completed": None})
     assert db.get_update_settings() == {"skip_completed": True, "skip_unread": True, "skip_never_read": False}
+
+
+def test_plateforme_et_popularite_enregistrees(db):
+    sid = db.insert_series("https://www.scan-manga.com/p.html", make_parsed([site_chapter(1)], platform="Webtoons", popularity=245))
+    db.update_series_result(sid, make_parsed([site_chapter(1)], platform="Webtoons", popularity=250, team="Poséidon Scans"))
+    s = db.get_series_by_id(sid)
+    assert (s["platform"], s["popularity"], s["team"]) == ("Webtoons", 250, "Poséidon Scans")

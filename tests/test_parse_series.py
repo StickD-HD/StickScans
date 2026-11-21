@@ -87,3 +87,54 @@ def test_couverture_douteuse_ignoree(series_html):
         "https://www.scan-manga.com/img/manga/serie-test.jpg", "javascript:alert(1)"
     )
     assert parse_series_page(html)["cover_url"] is None
+
+
+# --- Vraie fiche du site (Absolute Regression, novembre 2026) ---
+
+@pytest.fixture
+def real_html() -> str:
+    from conftest import FIXTURES
+    return (FIXTURES / "scan_manga_reelle.html").read_text(encoding="utf-8")
+
+
+def test_vraie_fiche_est_reconnue(real_html):
+    from app.fetcher import CHALLENGE_MARKERS, READY_RE
+    assert READY_RE.search(real_html)  # sinon fetch_html refuserait la page (« structure du site changée ? »)
+    assert not any(m in real_html[:5000] for m in CHALLENGE_MARKERS)
+
+
+def test_vraie_fiche_metadonnees(real_html):
+    data = parse_series_page(real_html)
+    assert data["title"] == "Absolute Regression"
+    assert data["alt_names"] == ["Hồi Quy Tuyệt Đối"]
+    assert data["cover_url"] == "https://static.scan-manga.com/img/manga/Absolute_Regression_1_2175.jpg"
+    assert data["status"] == "En cours"
+    assert data["author"] == "Jin-Hwan Park et JP et Jang Yeonghun"
+    assert data["category"] == "Manhwa Shonen"
+    assert data["year"] == "2024"
+    assert data["editor"] == "Naver et Studio JHS"
+    assert data["genres"] == ["Action", "Arts martiaux", "Aventure", "Fantaisie", "Historique", "Webcomic"]
+    assert data["synopsis"].startswith("Le jeune maître du culte démoniaque")
+
+
+def test_vraie_fiche_team_et_plateforme(real_html):
+    data = parse_series_page(real_html)
+    assert data["team"] == "Poséidon Scans"   # case « Plateforme » : lien /team-…
+    assert data["platform"] == "Webtoons"     # case « Plateforme » : lien /plateforme-…
+
+
+def test_vraie_fiche_popularite(real_html):
+    # 245 « J'aime » ; avant la correction, la note (4.9/5) et les votes (250) donnaient 495250.
+    assert parse_series_page(real_html)["popularity"] == 245
+
+
+def test_vraie_fiche_chapitres(real_html):
+    data = parse_series_page(real_html)
+    chapters = {c["number"]: c for c in data["chapters"]}
+    assert data["last_chapter_number"] == "127"
+    assert data["last_chapter_url"] == "https://www.scan-manga.com/lecture-en-ligne/Absolute-Regression-Chapitre-127-FR_585095.html"
+    assert [c["number"] for c in data["chapters"]][:3] == ["127", "126", "125"]
+    assert len(chapters) == 17
+    assert all(chapters[str(n)]["link_type"] == "site" for n in range(116, 128))
+    # Chapitres licenciés : lien webtoons.com volontairement pas conservé.
+    assert all(chapters[n] == {"number": n, "url": "", "link_type": "aucun"} for n in ("115", "114", "113", "2", "1"))

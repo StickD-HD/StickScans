@@ -1,7 +1,8 @@
 """
 Parseur pour une page série de scan-manga.com.
 Extrait : titre, titres alternatifs, couverture, statut, synopsis, auteur, année, éditeur,
-team, popularité, catégorie, genres, dernier chapitre, et la liste complète des chapitres.
+team, plateforme officielle, popularité, catégorie, genres, dernier chapitre, et la liste complète des chapitres.
+Vérifié sur une vraie fiche (tests/fixtures/scan_manga_reelle.html, novembre 2026).
 """
 import re
 from urllib.parse import urlparse
@@ -93,6 +94,25 @@ def extract_alt_names(html: str) -> list[str]:
     return names
 
 
+def _popularity(value_tag) -> int | None:
+    """Nombre de « J'aime » de la série. La case Popularité contient aussi la note (4.9 sur 5) et le nombre de votes :
+    lire tout son texte collait ces nombres (4.9, 5, 250 => 495250)."""
+    likes = value_tag.select_one('[itemprop="interactionCount"][content^="UserLikes:"]')
+    if likes:
+        digits = re.sub(r"\D", "", likes["content"].split(":", 1)[1])
+        if digits:
+            return int(digits)
+    votes = value_tag.select_one('[itemprop="ratingCount"]')
+    if votes:
+        digits = re.sub(r"\D", "", votes.get("content") or votes.get_text())
+        if digits:
+            return int(digits)
+    text = value_tag.get_text(" ", strip=True)
+    if re.fullmatch(r"[\d\s]+", text or ""):  # simple nombre (« 1 234 »)
+        return int(re.sub(r"\D", "", text))
+    return None
+
+
 def _clean_synopsis(tag):
     if not tag:
         return None
@@ -119,7 +139,7 @@ def parse_series_page(html: str) -> dict:
 
     synopsis = _clean_synopsis(soup.select_one('p[itemprop="description"]'))
 
-    status = author = category = year = editor = team = None
+    status = author = category = year = editor = team = platform = None
     popularity = None
     genres = []
 
@@ -152,9 +172,16 @@ def parse_series_page(html: str) -> dict:
             names = [a.get_text(strip=True) for a in value_tag.select("a")]
             names = [n for n in names if n] or list(value_tag.stripped_strings)
             team = ", ".join(names) or None
+        elif "plateforme" in label_text:
+            # Case « Plateforme » : la ou les teams de traduction (liens /team-…) et la plateforme officielle
+            # qui publie la série (liens /plateforme-…, ex. Webtoons).
+            links = value_tag.select("a[href]")
+            teams = [a.get_text(strip=True) for a in links if "/team-" in a["href"]]
+            platforms = [a.get_text(strip=True) for a in links if "/plateforme-" in a["href"]]
+            team = ", ".join(n for n in teams if n) or team
+            platform = ", ".join(n for n in platforms if n) or None
         elif "popularit" in label_text:
-            digits = re.sub(r"\D", "", value_tag.get_text(strip=True))
-            popularity = int(digits) if digits else None
+            popularity = _popularity(value_tag)
 
     if labels and not values:
         # Page tronquée côté site : on refuse plutôt que d'écraser les données déjà en base par du vide.
@@ -188,6 +215,7 @@ def parse_series_page(html: str) -> dict:
         "year": year,
         "editor": editor,
         "team": team,
+        "platform": platform,
         "popularity": popularity,
         "genres": genres,
         "last_chapter_number": last_chapter_number,
