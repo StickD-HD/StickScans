@@ -91,6 +91,14 @@ cd /git/StickScans && git pull
 systemctl restart stickscans@moi
 ```
 
+## Tests
+
+Facultatif, à lancer depuis le dépôt avant un déploiement (aucune requête vers le site ni vers AniList) :
+```bash
+/opt/stickscans/venv/bin/pip install -r /git/StickScans/requirements-dev.txt   # une seule fois
+cd /git/StickScans && /opt/stickscans/venv/bin/python -m pytest -q
+```
+
 ## Plusieurs instances
 
 Chaque personne a son instance (sa base, son compte, son port). Pour en ajouter une : crée
@@ -113,7 +121,13 @@ partagent les pages récupérées et sollicitent moins le site. Décale leurs v�
 | `FETCH_BLOCK_COOLDOWN_MINUTES` | pause après un 403/429 | 60 |
 | `SCRAPE_CACHE_DIR` | dossier de pages partagé entre instances | désactivé |
 | `SCRAPE_CACHE_MAX_AGE_MINUTES` | âge maximal d'une copie réutilisable | 40 |
+| `SCRAPE_CACHE_MODE` | `both` (lit et écrit), `read`, `write` ou `off` ; seulement si `SCRAPE_CACHE_DIR` est défini | `both` |
 | `TRUST_CF_CONNECTING_IP` | `true` derrière un tunnel Cloudflare | `false` |
+| `AUTH_SESSION_DAYS` | durée d'une session de connexion, en jours | 30 |
+| `AUTH_SECRET` | clé de signature des sessions (sinon générée dans `data/auth_secret`) | générée |
+| `AUTH_COOKIE_NAME` | nom du cookie de session (déjà différent pour chaque instance) | automatique |
+| `ANILIST_SYNC_MINUTES` | fréquence de la copie de l'état AniList dans l'appli (0 = désactivée) | 15 |
+| `READING_MINUTES_PER_CHAPTER` | durée estimée d'un chapitre, pour l'aperçu de lecture | 5 |
 
 ## Sauvegardes
 

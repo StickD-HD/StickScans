@@ -474,9 +474,12 @@ function renderChecksList(runs) {
   for (const run of runs) {
     const row = document.createElement("div");
     row.className = "run-row";
-    const state = run.status === "terminée"
-      ? `${fmtDuration(run.duration_seconds)} · ${run.ok_count} OK${run.error_count ? ` · <em class="warn-text">${run.error_count} erreur${run.error_count > 1 ? "s" : ""}</em>` : ""}${run.new_chapters ? ` · ${run.new_chapters} nouveau${run.new_chapters > 1 ? "x" : ""}` : ""}`
-      : `<em class="warn-text">${run.status}</em>`;
+    // « interrompue » avec une durée = coupée par un refus du site (compteurs connus) ;
+    // sans durée = coupée par un redémarrage de l'appli.
+    const finished = run.status === "terminée" || (run.status === "interrompue" && run.duration_seconds != null);
+    const state = finished
+      ? `${run.status === "interrompue" ? '<em class="warn-text">interrompue (site)</em> · ' : ""}${fmtDuration(run.duration_seconds)} · ${run.ok_count} OK${run.error_count ? ` · <em class="warn-text">${run.error_count} erreur${run.error_count > 1 ? "s" : ""}</em>` : ""}${run.new_chapters ? ` · ${run.new_chapters} nouveau${run.new_chapters > 1 ? "x" : ""}` : ""}`
+      : `<em class="warn-text">${escapeHtml(run.status)}</em>`;
     row.innerHTML = `
       <div class="run-head">
         <div><strong>${formatWhen(run.started_at)}</strong><small class="update-time">${state}</small></div>
@@ -1328,8 +1331,17 @@ anilistSearchBtn.addEventListener("click", async () => {
   anilistSearchBtn.textContent = "...";
   try {
     const res = await fetch(`/api/anilist/search?q=${encodeURIComponent(q)}`);
-    const results = await res.json();
+    const results = await res.json().catch(() => null);
     anilistSearchResults.innerHTML = "";
+    if (!res.ok || !Array.isArray(results)) {
+      const msg = results && typeof results.detail === "string" ? results.detail : "Recherche AniList impossible pour l'instant.";
+      anilistSearchResults.innerHTML = `<li class="error">⚠️ ${escapeHtml(msg)}</li>`;
+      return;
+    }
+    if (results.length === 0) {
+      anilistSearchResults.innerHTML = '<li class="section-label">Aucun résultat sur AniList.</li>';
+      return;
+    }
     for (const r of results) {
       const li = document.createElement("li");
       li.className = "anilist-result-row";

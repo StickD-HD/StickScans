@@ -276,14 +276,6 @@ def get_series(series_id: int):
     return series
 
 
-@app.post("/api/series/{series_id}/unlock/{field}")
-def unlock_field(series_id: int, field: str):
-    if not database.get_series_by_id(series_id):
-        raise HTTPException(404, "Série introuvable")
-    database.unlock_field(series_id, field)
-    return database.get_series_by_id(series_id)
-
-
 @app.post("/api/series")
 def add_series(payload: AddSeriesRequest):
     url = normalize_series_url(payload.url)
@@ -664,7 +656,10 @@ def set_anilist_client_id(payload: AnilistClientIdRequest):
 
 @app.get("/api/anilist/search")
 def search_anilist(q: str):
-    return anilist.search_media(q)
+    try:
+        return anilist.search_media(q)
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
 
 
 @app.post("/api/series/{series_id}/anilist/link")

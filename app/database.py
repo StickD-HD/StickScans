@@ -160,6 +160,9 @@ def init_db():
             conn.execute("UPDATE chapters SET is_initial_fetch = 1")
         # Les liens vers les plateformes officielles ne sont pas conservés : ces chapitres n'ont « pas de lien »
         conn.execute("UPDATE chapters SET link_type = 'aucun', url = '' WHERE link_type = 'externe'")
+        # La modification manuelle du titre et de la couverture a été retirée : les séries verrouillées avant ce
+        # retrait reprennent le titre et la couverture du site (ou d'AniList) dès la prochaine vérification.
+        conn.execute("UPDATE series SET cover_locked = 0, title_locked = 0 WHERE cover_locked = 1 OR title_locked = 1")
         # Journal des vérifications : colonne « source » (site ou copie d'une autre instance)
         existing_items = {row["name"] for row in conn.execute("PRAGMA table_info(check_run_items)")}
         if "source" not in existing_items:
@@ -189,7 +192,8 @@ def add_check_item(run_id: int, series_id: int, title: str | None, duration: flo
         )
 
 
-def finish_check_run(run_id: int, duration: float):
+def finish_check_run(run_id: int, duration: float, status: str = "terminée"):
+    """status : « terminée », ou « interrompue » quand le site a refusé les requêtes en cours de route."""
     with get_conn() as conn:
         counts = conn.execute(
             """
@@ -205,11 +209,11 @@ def finish_check_run(run_id: int, duration: float):
         conn.execute(
             """
             UPDATE check_runs
-            SET finished_at = datetime('now'), duration_seconds = ?, status = 'terminée',
+            SET finished_at = datetime('now'), duration_seconds = ?, status = ?,
                 ok_count = ?, error_count = ?, new_chapters = ?
             WHERE id = ?
             """,
-            (round(duration, 1), counts["ok_count"], counts["error_count"], new_total, run_id),
+            (round(duration, 1), status, counts["ok_count"], counts["error_count"], new_total, run_id),
         )
         conn.execute(
             f"DELETE FROM check_runs WHERE started_at < datetime('now', '-{CHECK_LOG_RETENTION_DAYS} days')"
@@ -523,14 +527,6 @@ def update_series_result(series_id: int, parsed: dict) -> list[dict]:
 
         _upsert_genres(conn, series_id, parsed.get("genres") or [])
         return _upsert_chapters(conn, series_id, parsed.get("chapters") or [], is_initial=False)
-
-
-def unlock_field(series_id: int, field: str):
-    col = {"cover": "cover_locked", "title": "title_locked"}.get(field)
-    if not col:
-        return
-    with get_conn() as conn:
-        conn.execute(f"UPDATE series SET {col} = 0 WHERE id = ?", (series_id,))
 
 
 def _upsert_chapters(conn, series_id: int, chapters: list[dict], is_initial: bool = False) -> list[dict]:

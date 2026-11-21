@@ -241,12 +241,23 @@ def get_score_format() -> str:
 
 
 def search_media(query: str) -> list[dict]:
-    resp = requests.post(
-        API_URL, json={"query": SEARCH_QUERY, "variables": {"search": query}}, headers=_headers(), timeout=15
-    )
-    data = resp.json()
+    """Recherche par titre. RuntimeError (message affichable) si AniList est injoignable ou répond une erreur."""
+    try:
+        resp = requests.post(
+            API_URL, json={"query": SEARCH_QUERY, "variables": {"search": query}}, headers=_headers(), timeout=15
+        )
+    except requests.RequestException as e:
+        raise RuntimeError(f"Impossible de joindre AniList : {e}") from e
+    if resp.status_code == 429:
+        raise RuntimeError("Limite de requêtes AniList atteinte, réessaie dans une minute")
+    try:
+        data = resp.json()
+    except ValueError:
+        raise RuntimeError(f"Réponse AniList illisible (HTTP {resp.status_code})")
+    if resp.status_code != 200 or data.get("errors"):
+        raise RuntimeError(f"AniList a refusé la recherche (HTTP {resp.status_code})")
     results = []
-    for m in data.get("data", {}).get("Page", {}).get("media", []) or []:
+    for m in ((data.get("data") or {}).get("Page") or {}).get("media") or []:
         t = m.get("title", {})
         title = t.get("english") or t.get("romaji") or t.get("native")
         results.append({

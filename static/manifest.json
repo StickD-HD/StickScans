@@ -1,6 +1,6 @@
 {
   "name": "StickScans",
-  "short_name": "SticScans",
+  "short_name": "StickScans",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#080D18",

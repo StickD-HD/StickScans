@@ -239,7 +239,7 @@ def check_all_series(trigger: str = "auto"):
             checks_log.error("=== Vérification [%s] interrompue : le site refuse les requêtes. "
                              "Les séries restantes seront revérifiées au prochain passage ===", trigger)
         total_duration = time.monotonic() - started
-        database.finish_check_run(run_id, total_duration)
+        database.finish_check_run(run_id, total_duration, status="interrompue" if interrupted else "terminée")
         checks_log.info(
             "=== Fin [%s] en %s : %d OK, %d erreur(s), %d nouveau(x) chapitre(s)%s%s ===",
             trigger, format_duration(total_duration), ok, errors, new_chapters,

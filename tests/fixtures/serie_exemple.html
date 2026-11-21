@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<!-- Page SYNTHÉTIQUE, construite d'après les sélecteurs de app/parse_series.py (pas une copie du site).
+     À compléter par une vraie fiche enregistrée depuis scan-manga.com pour vérifier que le site n'a pas changé. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta property="og:image" content="https://www.scan-manga.com/img/manga/serie-test.jpg">
+<title>Série Test - Scan Manga</title>
+</head>
+<body>
+<div class="h2_titre">
+  <h2 itemprop="headline name">Série Test</h2>
+  <span itemprop="alternativeHeadline">Test Series, </span>
+  <span itemprop="alternativeHeadline">테스트 시리즈</span>
+  <span itemprop="alternativeHeadline">Test Series</span>
+</div>
+
+<p itemprop="description">Première ligne du résumé.<br>Deuxième ligne.<span style="display:none">texte caché</span><br><br><br><br>Fin du résumé.£</p>
+
+<div class="fiche_technique">
+  <ul class="contenu_titres_fiche_technique">
+    <li>Auteur(s)</li>
+    <li>Genre(s)</li>
+    <li>Catégorie</li>
+    <li>Année</li>
+    <li>Éditeur</li>
+    <li>Statut</li>
+    <li>Team</li>
+    <li>Popularité</li>
+  </ul>
+  <ul class="contenu_texte_fiche_technique">
+    <li><a href="/auteur/a">Auteur A</a><a href="/auteur/b">Auteur B</a></li>
+    <li><a class="infoBulle" href="/genre/action">Action<span>Infobulle à ignorer</span></a><a class="infoBulle" href="/genre/fantasy">Fantasy<span>Autre infobulle</span></a></li>
+    <li>Manhwa</li>
+    <li>2021</li>
+    <li>Kakao</li>
+    <li>En cours</li>
+    <li><a href="/team/1">Team Un</a><a href="/team/2">Team Deux</a></li>
+    <li>1 234</li>
+  </ul>
+</div>
+
+<ul class="chapitres">
+  <li class="chapitre">
+    <div class="chapitre_nom">Chapitre 12</div>
+    <a href="https://www.scan-manga.com/lecture-en-ligne/Serie-Test-Chapitre-12-FR_501.html">Lire</a>
+  </li>
+  <li class="chapitre">
+    <div class="chapitre_nom">Chapitre 11.5</div>
+    <a href="/lecture-en-ligne/Serie-Test-Chapitre-11.5-FR_500.html">Lire</a>
+  </li>
+  <li class="chapitre">
+    <div class="chapitre_nom">Chapitre 11</div>
+    <a href="https://www.plateforme-officielle.example/serie-test/11">Lire sur la plateforme officielle</a>
+  </li>
+  <li class="chapitre">
+    <div class="chapitre_nom">Chapitre 10</div>
+  </li>
+  <li class="chapitre">
+    <div class="chapitre_nom">Chapitre 9-1</div>
+    <a href="https://www.scan-manga.com/lecture-en-ligne/Serie-Test-Chapitre-9-1-FR_498.html">Lire</a>
+  </li>
+  <li class="chapitre">
+    <div class="chapitre_nom">Bonus sans numéro</div>
+  </li>
+</ul>
+
+<script>
+$(function () {
+  $('.ReadLast').prop('href', 'https://www.scan-manga.com/lecture-en-ligne/Serie-Test-Chapitre-12-FR_501.html');
+});
+</script>
+</body>
+</html>

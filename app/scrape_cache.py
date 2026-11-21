@@ -9,7 +9,7 @@ récupérées normalement.
 Réglages (variables d'environnement) :
 - SCRAPE_CACHE_MODE            : "off" (défaut), "write" (principale), "read" (secondaire) ou "both" (les deux instances lisent ET écrivent).
 - SCRAPE_CACHE_DIR             : dossier de la copie (le même pour les deux instances).
-- SCRAPE_CACHE_MAX_AGE_MINUTES : âge maximal d'une copie réutilisable (défaut : 30).
+- SCRAPE_CACHE_MAX_AGE_MINUTES : âge maximal d'une copie réutilisable (défaut : 40).
 """
 import gzip
 import hashlib
