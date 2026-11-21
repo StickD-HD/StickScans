@@ -100,6 +100,16 @@ cd /git/StickScans && git pull
 systemctl restart stickscans@moi
 ```
 
+## Structure du code
+
+- `app/` (Python, FastAPI) : `main.py` (routes), `database.py` (SQLite), `fetcher.py` + `site_guard.py` (requêtes vers
+  le site et leurs limites), `schedule.py` (fréquence de chaque série), `scraper.py` (vérifications), `parse_series.py`
+  (lecture des fiches), `anilist.py`, `auth.py`, `backup.py`, `storage.py`, `scrape_cache.py`.
+- `static/` : `index.html`, `style.css`, et `js/` avec un fichier par écran, chargés dans l'ordre par `index.html` :
+  `core.js` (socle commun), `library.js`, `series.js`, `add.js`, `updates-history.js`, `checks.js`, `reading.js`,
+  `settings*.js` (une page de Réglages chacun) et `main.js` (démarrage, en dernier). Pas d'étape de compilation.
+- `tests/` : tests automatiques (aucune requête vers le site ni vers AniList).
+
 ## Tests
 
 Facultatif, à lancer depuis le dépôt avant un déploiement (aucune requête vers le site ni vers AniList) :

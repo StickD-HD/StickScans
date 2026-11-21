@@ -1,0 +1,47 @@
+// Réglages : liste des rubriques et navigation entre les pages.
+// Fichier 8/15 : chargé dans l'ordre par index.html ; tous partagent la même portée globale.
+
+// ======================================================================
+// Réglages : liste des rubriques, puis une page par rubrique
+// ======================================================================
+const settingsHome = document.getElementById("settings-home");
+const settingsTitle = document.getElementById("settings-title");
+const settingsBackBtn = document.getElementById("settings-back-btn");
+const settingsPageEls = document.querySelectorAll(".settings-page");
+
+const SETTINGS_PAGE_LOADERS = {
+  display: () => loadDisplayPage(),
+  categories: () => loadCategoryManageList(),
+  updates: () => loadUpdateSettings(),
+  anilist: () => loadSettingsAnilistStatus(),
+  storage: () => loadStorage(),
+  backup: () => loadBackups(),
+};
+
+// name = null : retour à la liste des rubriques.
+function showSettingsPage(name) {
+  let title = "Réglages";
+  settingsPageEls.forEach((page) => {
+    const active = page.dataset.page === name;
+    page.classList.toggle("hidden", !active);
+    if (active) title = page.dataset.title;
+  });
+  settingsHome.classList.toggle("hidden", Boolean(name));
+  settingsBackBtn.classList.toggle("hidden", !name);
+  settingsTitle.textContent = title;
+  window.scrollTo(0, 0);
+  if (name && SETTINGS_PAGE_LOADERS[name]) SETTINGS_PAGE_LOADERS[name]();
+}
+
+function openSettingsPage(name) {
+  goToTopView("settings-view");
+  navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === "settings-view"));
+  lastTopView = "settings-view";
+  showSettingsPage(name);
+}
+
+settingsHome.addEventListener("click", (e) => {
+  const row = e.target.closest("[data-page]");
+  if (row) showSettingsPage(row.dataset.page);
+});
+settingsBackBtn.addEventListener("click", () => showSettingsPage(null));

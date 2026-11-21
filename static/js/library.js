@@ -1,0 +1,231 @@
+// Bibliothèque : grille, recherche, filtres et tri, série aléatoire, actualisation de toutes les séries.
+// Fichier 2/15 : chargé dans l'ordre par index.html ; tous partagent la même portée globale.
+
+const grid = document.getElementById("grid");
+const emptyMsg = document.getElementById("empty-msg");
+const refreshAllBtn = document.getElementById("refresh-all-btn");
+const refreshStatusText = document.getElementById("refresh-status-text");
+const sortSelect = document.getElementById("sort-select");
+const statusSelect = document.getElementById("status-select");
+const genreSelect = document.getElementById("genre-select");
+const hideReadCheckbox = document.getElementById("hide-read-checkbox");
+const searchInput = document.getElementById("search-input");
+const searchToggleBtn = document.getElementById("search-toggle-btn");
+const searchBar = document.getElementById("search-bar");
+const filterToggleBtn = document.getElementById("filter-toggle-btn");
+const filterModal = document.getElementById("filter-modal");
+const filterModalClose = document.getElementById("filter-modal-close");
+const categorySelect = document.getElementById("category-select");
+const manageCategoriesBtn = document.getElementById("manage-categories-btn");
+const homeMenuBtn = document.getElementById("home-menu-btn");
+const homeMenu = document.getElementById("home-menu");
+const filterBadge = document.getElementById("filter-badge");
+const refreshAllLabel = document.getElementById("refresh-all-label");
+const randomSeriesBtn = document.getElementById("random-series-btn");
+let libraryShown = []; // séries actuellement affichées dans la bibliothèque (donc déjà filtrées)
+const updatesRefreshBtn = document.getElementById("updates-refresh-btn");
+const updatesRefreshStatus = document.getElementById("updates-refresh-status");
+let searchDebounce = null;
+
+// Liste des catégories dans la fenêtre des filtres. Si la catégorie active n'existe plus (supprimée), on la retire.
+async function loadCategorySelect() {
+  const res = await fetch("/api/categories");
+  const categories = await res.json();
+  if (activeCategoryId !== "" && !categories.some((c) => String(c.id) === String(activeCategoryId))) {
+    activeCategoryId = "";
+  }
+  categorySelect.innerHTML = '<option value="">Toutes les catégories</option>';
+  for (const c of categories) {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name;
+    categorySelect.appendChild(opt);
+  }
+  categorySelect.value = String(activeCategoryId);
+  updateToolbarIndicators();
+}
+
+setupPopover(homeMenuBtn, homeMenu);
+
+randomSeriesBtn.addEventListener("click", () => {
+  if (libraryShown.length === 0) {
+    alert("Aucune série à ouvrir avec les filtres actuels.");
+    return;
+  }
+  openChaptersView(libraryShown[Math.floor(Math.random() * libraryShown.length)].id);
+});
+
+manageCategoriesBtn.addEventListener("click", () => openSettingsPage("categories"));
+
+searchToggleBtn.addEventListener("click", () => {
+  searchBar.classList.toggle("hidden");
+  if (!searchBar.classList.contains("hidden")) searchInput.focus();
+});
+filterToggleBtn.addEventListener("click", () => openModal(filterModal));
+filterModalClose.addEventListener("click", () => closeModal(filterModal));
+
+async function loadGenreSelect() {
+  const res = await fetch("/api/genres");
+  const genres = await res.json();
+  const current = genreSelect.value;
+  genreSelect.innerHTML = '<option value="">Tous les genres</option>';
+  for (const g of genres) {
+    const opt = document.createElement("option");
+    opt.value = g;
+    opt.textContent = g;
+    genreSelect.appendChild(opt);
+  }
+  genreSelect.value = current;
+}
+
+async function loadStatuses() {
+  const res = await fetch("/api/statuses");
+  const statuses = await res.json();
+  const current = statusSelect.value;
+  statusSelect.innerHTML = '<option value="">Tous les statuts</option>';
+  for (const s of statuses) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    statusSelect.appendChild(opt);
+  }
+  statusSelect.value = current;
+}
+
+// Loupe allumée si une recherche est en cours ; bouton de filtres allumé, avec le nombre de réglages actifs
+// (catégorie, genre, statut, séries lues masquées, tri différent du tri par défaut).
+function updateToolbarIndicators() {
+  const active = [
+    activeCategoryId !== "",
+    sortSelect.value && sortSelect.value !== "last_checked_at",
+    genreSelect.value,
+    statusSelect.value,
+    hideReadCheckbox.checked,
+  ].filter(Boolean).length;
+  filterToggleBtn.classList.toggle("active", active > 0);
+  filterBadge.textContent = String(active);
+  filterBadge.classList.toggle("hidden", active === 0);
+  searchToggleBtn.classList.toggle("active", searchInput.value.trim() !== "");
+}
+
+function saveFilters() {
+  const state = {
+    sort: sortSelect.value,
+    status: statusSelect.value,
+    genre: genreSelect.value,
+    hideRead: hideReadCheckbox.checked,
+    search: searchInput.value,
+    categoryId: activeCategoryId,
+  };
+  localStorage.setItem("stickscans_filters", JSON.stringify(state));
+}
+
+function getSavedFilters() {
+  try {
+    return JSON.parse(localStorage.getItem("stickscans_filters")) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+async function loadLibrary() {
+  updateToolbarIndicators();
+  saveFilters();
+  const params = new URLSearchParams({
+    sort: sortSelect.value,
+    hide_fully_read: hideReadCheckbox.checked,
+  });
+  if (activeCategoryId) params.set("category_id", activeCategoryId);
+  if (genreSelect.value) params.set("genre", genreSelect.value);
+  if (statusSelect.value) params.set("status", statusSelect.value);
+  if (searchInput.value.trim()) params.set("search", searchInput.value.trim());
+
+  const res = await fetch(`/api/series?${params}`);
+  const series = await res.json();
+  libraryShown = series;
+
+  grid.innerHTML = "";
+  emptyMsg.classList.toggle("hidden", series.length > 0);
+
+  for (const s of series) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="cover-wrap">
+        <img src="${escapeHtml(s.cover_url)}" alt="" loading="lazy">
+        <div class="badge-stack">
+          ${s.unread_count > 0 ? `<span class="badge">${s.unread_count}</span>` : ""}
+          ${s.last_error ? `<span class="badge badge-error" title="${escapeHtml(s.last_error)}">⚠️</span>` : ""}
+        </div>
+      </div>
+      <div class="info">
+        <div class="title">${escapeHtml(s.title || "Sans titre")}</div>
+        <div class="chapter">${s.last_chapter_number ? "Ch. " + escapeHtml(s.last_chapter_number) : "?"}</div>
+      </div>
+    `;
+    card.addEventListener("click", () => openChaptersView(s.id));
+    grid.appendChild(card);
+  }
+}
+
+async function startRefreshAll() {
+  const res = await fetch("/api/series/refresh-all", { method: "POST" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(typeof data.detail === "string" ? data.detail : "Actualisation impossible pour l'instant.");
+    return;
+  }
+  pollRefreshStatus();
+}
+refreshAllBtn.addEventListener("click", startRefreshAll);
+updatesRefreshBtn.addEventListener("click", startRefreshAll);
+
+async function pollRefreshStatus() {
+  refreshAllBtn.disabled = true;
+  updatesRefreshBtn.disabled = true;
+  updatesRefreshBtn.classList.add("busy");
+  let status;
+  try {
+    status = await (await fetch("/api/refresh-status")).json();
+  } catch (e) {
+    status = { is_running: false }; // serveur injoignable : on arrête de suivre, les boutons redeviennent utilisables
+  }
+
+  if (status.is_running) {
+    const pct = status.total > 0 ? Math.round((status.completed / status.total) * 100) : 0;
+    const counter = status.total > 0 ? `${status.completed}/${status.total}` : "";
+    refreshAllLabel.textContent = `Actualisation… ${pct} %`;
+    refreshStatusText.textContent = counter;
+    updatesRefreshStatus.textContent = counter;
+    setTimeout(pollRefreshStatus, 1000);
+  } else {
+    refreshAllBtn.disabled = false;
+    updatesRefreshBtn.disabled = false;
+    updatesRefreshBtn.classList.remove("busy");
+    refreshAllLabel.textContent = "↻ Actualiser toutes les séries";
+    refreshStatusText.textContent = "";
+    updatesRefreshStatus.textContent = "";
+    loadLibrary();
+    // La page Mises à jour affichée pendant l'actualisation se met à jour toute seule à la fin.
+    if (!document.getElementById("updates-view").classList.contains("hidden")) loadUpdates();
+  }
+}
+
+fetch("/api/refresh-status").then((r) => r.json()).then((status) => {
+  if (status.is_running) pollRefreshStatus();
+});
+
+categorySelect.addEventListener("change", () => {
+  activeCategoryId = categorySelect.value;
+  loadLibrary();
+});
+sortSelect.addEventListener("change", loadLibrary);
+statusSelect.addEventListener("change", loadLibrary);
+genreSelect.addEventListener("change", loadLibrary);
+hideReadCheckbox.addEventListener("change", loadLibrary);
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(loadLibrary, 300);
+});
+
+closeOnBackdrop(filterModal);
