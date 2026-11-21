@@ -47,9 +47,13 @@ async function loadCategorySelect() {
 
 setupPopover(homeMenuBtn, homeMenu);
 
+const emptyText = document.getElementById("empty-text");
+const emptyAddBtn = document.getElementById("empty-add-btn");
+emptyAddBtn.addEventListener("click", () => openAddModal());
+
 randomSeriesBtn.addEventListener("click", () => {
   if (libraryShown.length === 0) {
-    alert("Aucune série à ouvrir avec les filtres actuels.");
+    toast("Aucune série à ouvrir avec les filtres actuels.");
     return;
   }
   openChaptersView(libraryShown[Math.floor(Math.random() * libraryShown.length)].id);
@@ -146,16 +150,25 @@ async function loadLibrary() {
 
   grid.innerHTML = "";
   emptyMsg.classList.toggle("hidden", series.length > 0);
+  if (series.length === 0) {
+    // Bibliothèque vide : on propose d'ajouter une série ; filtres trop stricts : on le dit.
+    const filtered = Boolean(activeCategoryId || genreSelect.value || statusSelect.value || hideReadCheckbox.checked || searchInput.value.trim());
+    emptyText.textContent = filtered ? "Aucune série ne correspond à ta recherche ou à tes filtres." : "Aucune série suivie pour l'instant.";
+    emptyAddBtn.classList.toggle("hidden", filtered);
+  }
 
   for (const s of series) {
     const card = document.createElement("div");
     card.className = "card";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `${s.title || "Sans titre"}${s.unread_count > 0 ? `, ${s.unread_count} chapitre${s.unread_count > 1 ? "s" : ""} non lu${s.unread_count > 1 ? "s" : ""}` : ""}`);
     card.innerHTML = `
       <div class="cover-wrap">
         <img src="${escapeHtml(s.cover_url)}" alt="" loading="lazy">
         <div class="badge-stack">
           ${s.unread_count > 0 ? `<span class="badge">${s.unread_count}</span>` : ""}
-          ${s.last_error ? `<span class="badge badge-error" title="${escapeHtml(s.last_error)}">⚠️</span>` : ""}
+          ${s.last_error ? `<span class="badge badge-error" title="${escapeHtml(s.last_error)}">${icon("alert")}</span>` : ""}
         </div>
       </div>
       <div class="info">
@@ -172,7 +185,7 @@ async function startRefreshAll() {
   const res = await fetch("/api/series/refresh-all", { method: "POST" });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    alert(typeof data.detail === "string" ? data.detail : "Actualisation impossible pour l'instant.");
+    toast(typeof data.detail === "string" ? data.detail : "Actualisation impossible pour l'instant.", "error", 6000);
     return;
   }
   pollRefreshStatus();
@@ -202,7 +215,7 @@ async function pollRefreshStatus() {
     refreshAllBtn.disabled = false;
     updatesRefreshBtn.disabled = false;
     updatesRefreshBtn.classList.remove("busy");
-    refreshAllLabel.textContent = "↻ Actualiser toutes les séries";
+    refreshAllLabel.textContent = "Actualiser toutes les séries";
     refreshStatusText.textContent = "";
     updatesRefreshStatus.textContent = "";
     loadLibrary();

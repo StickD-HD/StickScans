@@ -134,7 +134,7 @@ async function loadSeriesCategories() {
 
   categoryCheckboxes.innerHTML = "";
   if (allCategories.length === 0) {
-    categoryCheckboxes.textContent = "Aucune catégorie créée (menu ⚙ de la bibliothèque).";
+    categoryCheckboxes.textContent = "Aucune catégorie pour l'instant : crée-en dans Réglages › Catégories.";
     return;
   }
   for (const c of allCategories) {
@@ -191,6 +191,7 @@ async function loadChapters() {
       const cb = li.querySelector(".select-checkbox");
       cb.addEventListener("change", (e) => {
         if (e.target.checked) selectedChapterIds.add(c.id); else selectedChapterIds.delete(c.id);
+        updateSelectionCount();
         li.classList.toggle("selected", e.target.checked);
       });
       li.addEventListener("click", (e) => {
@@ -277,8 +278,19 @@ async function markReadUpTo(number) {
 function setSelectionMode(on) {
   selectionMode = on;
   selectedChapterIds.clear();
-  selectModeBtn.textContent = on ? "✕ Annuler la sélection" : "☑ Sélectionner";
+  document.getElementById("select-mode-label").textContent = on ? "Annuler la sélection" : "Sélectionner";
   chaptersToolbar.classList.toggle("hidden", !on);
+  document.body.classList.toggle("selecting", on);
+  updateSelectionCount();
+}
+
+// Nombre de chapitres sélectionnés, et boutons d'action actifs seulement s'il y en a.
+function updateSelectionCount() {
+  const n = selectedChapterIds.size;
+  document.getElementById("selection-count").textContent = `${n} sélectionné${n > 1 ? "s" : ""}`;
+  bulkReadBtn.disabled = n === 0;
+  bulkUnreadBtn.disabled = n === 0;
+  selectAllBtn.textContent = n > 0 && n === currentChapters.length ? "Aucun" : "Tout";
 }
 
 selectModeBtn.addEventListener("click", () => {
@@ -296,6 +308,7 @@ selectAllBtn.addEventListener("click", () => {
   } else {
     selectedChapterIds = new Set(currentChapters.map((c) => c.id));
   }
+  updateSelectionCount();
   loadChapters();
 });
 
@@ -322,7 +335,8 @@ recheckSeriesBtn.addEventListener("click", async () => {
     const data = await res.json().catch(() => ({}));
     await loadSeriesDetail();
     await loadChapters();
-    if (data.check_error) alert("Vérification impossible : " + data.check_error);
+    if (data.check_error) toast("Vérification impossible : " + data.check_error, "error", 6000);
+    else toast("Série à jour.", "ok");
   } finally {
     recheckSeriesBtn.disabled = false;
     detailMenuBtn.classList.remove("busy");
@@ -397,13 +411,13 @@ anilistAlignBtn.addEventListener("click", async () => {
     const res = await fetch(`/api/series/${currentSeriesId}/anilist/align-local`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      alert(data.detail || "Alignement impossible");
+      toast(data.detail || "Alignement impossible", "error");
       return;
     }
     await loadSeriesDetail();
     await loadChapters();
   } catch (e) {
-    alert("Impossible de joindre le serveur");
+    toast("Impossible de joindre le serveur", "error");
   } finally {
     anilistAlignBtn.disabled = false;
   }
@@ -446,7 +460,7 @@ anilistNotesInput.addEventListener("input", updateNotesCount);
 
 function renderAnilistSection(s) {
   if (s.anilist_id) {
-    anilistActionBtn.textContent = "✓ " + (s.anilist_title || "AniList");
+    anilistActionBtn.innerHTML = `${icon("check")}<span>${escapeHtml(s.anilist_title || "AniList")}</span>`;
     anilistActionBtn.title = s.anilist_title || "";
     anilistActionBtn.classList.add("linked");
     anilistActionBtn.dataset.linked = "1";
@@ -462,7 +476,7 @@ function renderAnilistSection(s) {
     anilistEndInput.value = savedDates.end;
     anilistStatusText.textContent = s.anilist_last_error ? "⚠️ " + s.anilist_last_error : "";
   } else {
-    anilistActionBtn.textContent = "🔗 AniList";
+    anilistActionBtn.innerHTML = `${icon("link")}<span>AniList</span>`;
     anilistActionBtn.classList.remove("linked");
     anilistActionBtn.dataset.linked = "";
     anilistSearchResults.innerHTML = "";
@@ -626,7 +640,7 @@ urlChangeBtn.addEventListener("click", async () => {
     await loadSeriesDetail();
     await loadChapters();
     const n = (data.new_chapters || []).length;
-    alert(`Adresse mise à jour.${n ? ` ${n} nouveau${n > 1 ? "x" : ""} chapitre${n > 1 ? "s" : ""}.` : ""}`);
+    toast(`Adresse mise à jour.${n ? ` ${n} nouveau${n > 1 ? "x" : ""} chapitre${n > 1 ? "s" : ""}.` : ""}`, "ok");
   } catch (e) {
     urlChangeError.textContent = "⚠ " + e.message;
     urlChangeError.classList.remove("hidden");

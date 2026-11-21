@@ -22,7 +22,7 @@ if (logoutOthersBtn) {
   logoutOthersBtn.addEventListener("click", async () => {
     if (!confirm("Déconnecter tous les autres appareils ? Ils devront se reconnecter avec le mot de passe. Cet appareil reste connecté.")) return;
     const res = await _originalFetch("/api/auth/logout-others", { method: "POST" });
-    alert(res.ok ? "Les autres appareils sont déconnectés." : "Échec : réessaie.");
+    toast(res.ok ? "Les autres appareils sont déconnectés." : "Échec : réessaie.", res.ok ? "ok" : "error");
   });
 }
 if (logoutBtn) {
@@ -241,3 +241,51 @@ const plural = (n, one, many) => `${n.toLocaleString("fr-FR")} ${n > 1 ? many : 
 function closeOnBackdrop(m) {
   m.addEventListener("click", (e) => { if (e.target === m) closeModal(m); });
 }
+
+
+// --- Icônes : une icône du jeu défini en tête de index.html ---
+function icon(name) {
+  return `<svg class="ico" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+}
+
+// --- Messages discrets (à la place des alertes du navigateur) ---
+// kind : "ok" (vert d'eau), "error" (orange) ou rien (neutre). Les confirmations restent celles du navigateur.
+const toastBox = document.createElement("div");
+toastBox.id = "toasts";
+toastBox.setAttribute("role", "status");
+toastBox.setAttribute("aria-live", "polite");
+document.body.appendChild(toastBox);
+
+function toast(message, kind = "", duration = 3600) {
+  const el = document.createElement("div");
+  el.className = "toast" + (kind ? " " + kind : "");
+  el.textContent = message;
+  toastBox.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  const close = () => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 250);
+  };
+  el.addEventListener("click", close);
+  setTimeout(close, duration);
+}
+
+// --- Couverture introuvable : à la place de l'icône « image cassée » du navigateur, un fond neutre avec un livre ---
+const BLANK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+document.addEventListener("error", (e) => {
+  const img = e.target;
+  if (img instanceof HTMLImageElement && !img.classList.contains("img-missing")) {
+    img.classList.add("img-missing");
+    img.src = BLANK_IMAGE;
+  }
+}, true);
+
+// --- Clavier : les cartes et les lignes cliquables (role="button") s'activent avec Entrée ou Espace ---
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const el = e.target;
+  if (el instanceof HTMLElement && el.getAttribute("role") === "button" && el.tagName !== "BUTTON") {
+    e.preventDefault();
+    el.click();
+  }
+});

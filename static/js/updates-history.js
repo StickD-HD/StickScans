@@ -57,7 +57,7 @@ function appendMoreButton(container, pager, rerender) {
   }
 }
 
-function renderGroupedList(container, items, dateField, labelFn, showTime = false) {
+function renderGroupedList(container, items, dateField, titleFn, detailFn) {
   container.innerHTML = "";
   if (items.length === 0) {
     container.innerHTML = '<p class="empty-msg">Rien pour l\'instant.</p>';
@@ -75,9 +75,11 @@ function renderGroupedList(container, items, dateField, labelFn, showTime = fals
     }
     const row = document.createElement("div");
     row.className = "update-row";
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
     row.innerHTML = `
       <img src="${escapeHtml(item.series_cover)}" alt="" loading="lazy">
-      <span>${labelFn(item)}${showTime ? `<small class="update-time">${formatTimeLabel(item[dateField])}</small>` : ""}</span>
+      <span><strong class="row-title">${titleFn(item)}</strong><small class="update-time">${detailFn(item)}</small></span>
     `;
     row.addEventListener("click", () => openChaptersView(item.series_id));
     container.appendChild(row);
@@ -103,8 +105,8 @@ function renderUpdates() {
     container,
     updatesPager.items,
     "discovered_at",
-    (item) => `Chapitre ${escapeHtml(item.number)} de ${escapeHtml(item.series_title)}`,
-    true
+    (item) => escapeHtml(item.series_title),
+    (item) => `Chapitre ${escapeHtml(item.number)} · ${formatTimeLabel(item.discovered_at)}`,
   );
   appendMoreButton(container, updatesPager, renderUpdates);
 }
@@ -145,15 +147,17 @@ function renderHistoryList(container, items) {
     const first = group.chapters.find((c) => c.number_float === Math.min(...numbers));
     const lastCh = group.chapters.find((c) => c.number_float === Math.max(...numbers));
     const count = group.chapters.length;
-    const label = count === 1
-      ? `Chapitre ${escapeHtml(first.number)} de ${escapeHtml(group.series_title)}`
-      : `Chapitres ${escapeHtml(first.number)} à ${escapeHtml(lastCh.number)} de ${escapeHtml(group.series_title)}`;
+    const detail = count === 1
+      ? `Chapitre ${escapeHtml(first.number)}`
+      : `Chapitres ${escapeHtml(first.number)} à ${escapeHtml(lastCh.number)} · ${count} chapitres`;
     const row = document.createElement("div");
     row.className = "update-row";
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
     row.innerHTML = `
       <img src="${escapeHtml(group.series_cover)}" alt="" loading="lazy">
-      <span>${label}${count > 1 ? `<small class="update-time">${count} chapitres</small>` : ""}</span>
-      <button class="history-remove-btn" title="Retirer de l'historique" aria-label="Retirer de l'historique">✕</button>
+      <span><strong class="row-title">${escapeHtml(group.series_title)}</strong><small class="update-time">${detail} · ${formatTimeLabel(group.read_at)}</small></span>
+      <button class="history-remove-btn" type="button" title="Retirer de l'historique" aria-label="Retirer de l'historique">${icon("x")}</button>
     `;
     row.addEventListener("click", () => openChaptersView(group.series_id));
     row.querySelector(".history-remove-btn").addEventListener("click", async (e) => {

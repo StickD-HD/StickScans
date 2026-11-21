@@ -17,6 +17,33 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  <!-- Icônes de l'appli (trait de 1,8, angles arrondis, comme la barre du bas). Utilisation : <svg class="ico"><use href="#i-nom"/></svg> -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.3 7.3a1 1 0 0 1-1.4 0Z"/><circle cx="8" cy="8" r="1.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+    <symbol id="i-lifebuoy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.8"/><path d="m5.6 5.6 3.7 3.7M14.7 14.7l3.7 3.7M18.4 5.6l-3.7 3.7M9.3 14.7l-3.7 3.7"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M7.5 16v-5M12 16V6M16.5 16v-8"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3.5H9z"/><path d="M9 12h6M9 16h4"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
+    <symbol id="i-devices" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="13" height="10" rx="1.5"/><path d="M6.5 19h5"/><rect x="17.5" y="9" width="4" height="11" rx="1"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5h3.5l10 11H21"/><path d="M3 17.5h3.5l3-3.3M14 9.8l2.5-3.3H21"/><path d="m18 3.5 3 3-3 3M18 14.5l3 3-3 3"/></symbol>
+    <symbol id="i-check-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 20h14"/></symbol>
+    <symbol id="i-paste" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3.5H9z"/><path d="m9 14 3 3 3-3M12 10v7"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2.8 19.5h18.4Z"/><path d="M12 10v4.5"/><path d="M12 17.3v.2"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="19" r="1.4" fill="currentColor"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m11 6-6 6 6 6"/></symbol>
+  </svg>
+
   <nav id="main-nav">
     <button class="nav-btn active" data-view="library-view">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5C4 4.67 4.67 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13Z"/><path d="M20 5.5c0-.83-.67-1.5-1.5-1.5H13v16h5.5c.83 0 1.5-.67 1.5-1.5v-13Z"/></svg>
@@ -54,14 +81,14 @@
           <span id="filter-badge" class="icon-badge hidden"></span>
         </button>
         <div class="menu-wrap">
-          <button id="home-menu-btn" class="icon-btn" type="button" title="Réglages de la bibliothèque" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          <button id="home-menu-btn" class="icon-btn" type="button" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-more"/></svg>
           </button>
           <div id="home-menu" class="popover hidden" role="menu">
-            <button id="add-btn" type="button" role="menuitem">＋ Ajouter une série</button>
-            <button id="random-series-btn" type="button" role="menuitem">🎲 Ouvrir une série aléatoire</button>
-            <button id="refresh-all-btn" type="button" role="menuitem"><span id="refresh-all-label">↻ Actualiser toutes les séries</span></button>
-            <button id="manage-categories-btn" type="button" role="menuitem">🏷 Gérer les catégories</button>
+            <button id="add-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter une série</button>
+            <button id="random-series-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-shuffle"/></svg>Ouvrir une série aléatoire</button>
+            <button id="refresh-all-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg><span id="refresh-all-label">Actualiser toutes les séries</span></button>
+            <button id="manage-categories-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>Gérer les catégories</button>
           </div>
         </div>
       </div>
@@ -72,14 +99,17 @@
     </div>
 
     <main id="library">
-      <p id="empty-msg" class="hidden">Aucune série suivie pour l'instant.</p>
+      <div id="empty-msg" class="hidden">
+        <p id="empty-text">Aucune série suivie pour l'instant.</p>
+        <button id="empty-add-btn" type="button" class="primary-btn">Ajouter une série</button>
+      </div>
       <div id="grid" class="grid"></div>
     </main>
   </div>
 
   <div id="updates-view" class="hidden">
     <header>
-      <h1>Mises à jour</h1>
+      <h1>Nouveautés</h1>
       <div class="header-actions">
         <span id="updates-refresh-status"></span>
         <button id="updates-refresh-btn" class="icon-btn" type="button" title="Vérifier les nouveaux chapitres" aria-label="Actualiser">
@@ -112,17 +142,17 @@
         <h3 class="settings-group">Bibliothèque</h3>
         <div class="settings-list">
         <button class="settings-row" type="button" data-page="display">
-          <span class="settings-ico">🖼</span>
+          <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-grid"/></svg></span>
           <span class="settings-txt"><strong>Affichage</strong><small>Grille ou liste, colonnes, informations</small></span>
           <span class="settings-chev">›</span>
         </button>
         <button class="settings-row" type="button" data-page="categories">
-          <span class="settings-ico">🏷</span>
+          <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg></span>
           <span class="settings-txt"><strong>Catégories</strong><small>Créer, renommer, supprimer</small></span>
           <span class="settings-chev">›</span>
         </button>
         <button class="settings-row" type="button" data-page="updates">
-          <span class="settings-ico">↻</span>
+          <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg></span>
           <span class="settings-txt"><strong>Mises à jour</strong><small>Vérifications, état du site, séries ignorées</small></span>
           <span class="settings-chev">›</span>
         </button>
@@ -131,17 +161,17 @@
         <h3 class="settings-group">Comptes et données</h3>
         <div class="settings-list">
         <button class="settings-row" type="button" data-page="anilist">
-          <span class="settings-ico">🔗</span>
+          <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg></span>
           <span class="settings-txt"><strong>AniList</strong><small>Compte et synchronisation</small></span>
           <span class="settings-chev">›</span>
         </button>
         <button class="settings-row" type="button" data-page="storage">
-          <span class="settings-ico">💾</span>
+          <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-database"/></svg></span>
           <span class="settings-txt"><strong>Stockage</strong><small>Espace utilisé, cache, nettoyage</small></span>
           <span class="settings-chev">›</span>
         </button>
         <button class="settings-row" type="button" data-page="backup">
-          <span class="settings-ico">🛟</span>
+          <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-lifebuoy"/></svg></span>
           <span class="settings-txt"><strong>Sauvegarde et restauration</strong><small>Copies de ta base, export et import</small></span>
           <span class="settings-chev">›</span>
         </button>
@@ -150,12 +180,12 @@
         <h3 class="settings-group">Suivi</h3>
         <div class="settings-list">
         <button class="settings-row" type="button" id="open-reading-btn">
-          <span class="settings-ico">📊</span>
+          <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-chart"/></svg></span>
           <span class="settings-txt"><strong>Aperçu de lecture</strong><small>Temps passé et séries les plus lues</small></span>
           <span class="settings-chev">›</span>
         </button>
         <button class="settings-row" type="button" id="open-checks-btn">
-          <span class="settings-ico">📋</span>
+          <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-clipboard"/></svg></span>
           <span class="settings-txt"><strong>Vérifications</strong><small>Journal des mises à jour des séries</small></span>
           <span class="settings-chev">›</span>
         </button>
@@ -163,11 +193,11 @@
 
         <div id="auth-section" class="settings-list hidden">
           <button id="logout-btn" class="settings-row danger-row" type="button">
-            <span class="settings-ico">⏻</span>
+            <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-power"/></svg></span>
             <span class="settings-txt"><strong>Se déconnecter</strong><small>De cet appareil</small></span>
           </button>
           <button id="logout-others-btn" class="settings-row danger-row" type="button">
-            <span class="settings-ico">⎋</span>
+            <span class="settings-ico"><svg class="ico" aria-hidden="true"><use href="#i-devices"/></svg></span>
             <span class="settings-txt"><strong>Déconnecter les autres appareils</strong><small>Téléphone perdu, ordinateur prêté… Cet appareil reste connecté</small></span>
           </button>
         </div>
@@ -348,7 +378,7 @@
     <header>
       <button id="checks-back-btn">← Retour</button>
       <h1>Vérifications</h1>
-      <button id="checks-refresh-btn" title="Actualiser">↻</button>
+      <button id="checks-refresh-btn" class="icon-btn" type="button" title="Actualiser" aria-label="Actualiser"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg></button>
     </header>
     <div id="checks-overview"></div>
     <section class="checks-block checks-journal">
@@ -397,19 +427,19 @@
 
   <div id="chapters-view" class="hidden">
     <header>
-      <button id="back-btn">← Retour</button>
+      <button id="back-btn" type="button">← Retour</button>
       <div class="menu-wrap">
         <button id="detail-menu-btn" class="icon-btn" type="button" title="Options" aria-label="Options" aria-haspopup="true" aria-expanded="false">
           <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
         </button>
         <div id="detail-menu" class="popover hidden" role="menu">
-          <button id="select-mode-btn" type="button" role="menuitem">☑ Sélectionner</button>
-          <button id="category-menu-btn" type="button" role="menuitem">🏷 Modifier la catégorie</button>
-          <button id="recheck-series-btn" type="button" role="menuitem">↻ Actualiser</button>
-          <button id="reset-progress-btn" type="button" role="menuitem">⟲ Réinitialiser la progression</button>
-          <button id="change-url-menu-btn" type="button" role="menuitem">🔗 Changer l'adresse</button>
-          <a id="detail-source-link" target="_blank" rel="noopener" role="menuitem">🌐 Ouvrir sur le web</a>
-          <button id="remove-series-btn" class="danger-item" type="button" role="menuitem">🗑 Retirer de la bibliothèque</button>
+          <button id="select-mode-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-check-square"/></svg><span id="select-mode-label">Sélectionner</span></button>
+          <button id="category-menu-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>Modifier la catégorie</button>
+          <button id="recheck-series-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg>Actualiser</button>
+          <button id="reset-progress-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-rotate-ccw"/></svg>Réinitialiser la progression</button>
+          <button id="change-url-menu-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg>Changer l'adresse</button>
+          <a id="detail-source-link" target="_blank" rel="noopener" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Ouvrir sur le web</a>
+          <button id="remove-series-btn" class="danger-item" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg>Retirer de la bibliothèque</button>
         </div>
       </div>
     </header>
@@ -429,9 +459,9 @@
       </div>
 
       <div id="detail-actions">
-        <button id="anilist-action-btn">🔗 AniList</button>
-        <button id="library-btn" type="button" title="Retirer de la bibliothèque">✓ Dans la bibliothèque</button>
-        <a id="detail-source-btn" class="action-btn-link" target="_blank" rel="noopener">🌐 Scan-Manga</a>
+        <button id="anilist-action-btn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg><span>AniList</span></button>
+        <button id="library-btn" type="button" title="Retirer de la bibliothèque"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>Dans la bibliothèque</span></button>
+        <a id="detail-source-btn" class="action-btn-link" target="_blank" rel="noopener"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg><span>Scan-Manga</span></a>
       </div>
 
       <div id="url-change" class="hidden">
@@ -486,11 +516,15 @@
 
     <div id="chapters-head">
       <h2 id="chapters-count"></h2>
-      <div id="chapters-toolbar" class="hidden">
-        <button id="select-all-btn" type="button">Tout sélectionner</button>
-        <button id="bulk-read-btn" type="button">Marquer lu</button>
-        <button id="bulk-unread-btn" type="button">Marquer non lu</button>
-        <button id="select-cancel-btn" type="button">Annuler</button>
+      <!-- Mode sélection : barre fixée en bas de l'écran (toujours accessible pendant le défilement) -->
+      <div id="chapters-toolbar" class="hidden" role="toolbar" aria-label="Chapitres sélectionnés">
+        <span id="selection-count" aria-live="polite">0 sélectionné</span>
+        <div class="toolbar-actions">
+          <button id="select-all-btn" type="button">Tout</button>
+          <button id="bulk-read-btn" type="button" class="primary" aria-label="Marquer comme lus"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Lu</button>
+          <button id="bulk-unread-btn" type="button" aria-label="Marquer comme non lus">Non lu</button>
+          <button id="select-cancel-btn" type="button" aria-label="Quitter la sélection"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
       </div>
     </div>
     <main>
@@ -507,7 +541,7 @@
         <p class="section-label">Colle un ou plusieurs liens de pages série scan-manga.com. Les fiches sont récupérées une par une, à au moins 45 s d'intervalle, pour ménager le site.</p>
         <textarea id="add-url" rows="4" placeholder="https://www.scan-manga.com/..." autocapitalize="off" spellcheck="false"></textarea>
         <div class="add-input-row">
-          <button id="add-paste-btn" class="mini-btn" type="button">📋 Coller</button>
+          <button id="add-paste-btn" class="mini-btn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-paste"/></svg>Coller</button>
           <span id="add-count" class="section-label"></span>
         </div>
         <div id="add-category-section" class="hidden">

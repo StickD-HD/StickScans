@@ -38,10 +38,10 @@ if (importDbBtn && importDbInput) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Erreur lors de l'importation");
       
-      alert("Base de données importée avec succès ! L'application va se recharger.");
-      location.reload(); // Recharge la page pour afficher les nouvelles données
+      toast("Base importée : l'application se recharge…", "ok");
+      setTimeout(() => location.reload(), 1200); // recharge la page pour afficher les nouvelles données
     } catch (err) {
-      alert("Erreur : " + err.message);
+      toast("Import impossible : " + err.message, "error", 7000);
     } finally {
       importDbBtn.disabled = false;
       importDbBtn.textContent = "Importer une base";
@@ -83,8 +83,8 @@ function renderBackups(data) {
       </div>
       <div class="backup-actions">
         <button type="button" class="mini-btn" data-act="restore">Restaurer</button>
-        <a class="mini-btn" href="/api/backups/${encodeURIComponent(b.name)}/download" download title="Télécharger">⬇</a>
-        <button type="button" class="mini-btn danger-btn" data-act="delete" title="Supprimer">🗑</button>
+        <a class="mini-btn" href="/api/backups/${encodeURIComponent(b.name)}/download" download title="Télécharger" aria-label="Télécharger">${icon("download")}</a>
+        <button type="button" class="mini-btn danger-btn" data-act="delete" title="Supprimer" aria-label="Supprimer">${icon("trash")}</button>
       </div>
     </li>`;
   }).join("");
@@ -152,8 +152,8 @@ backupList.addEventListener("click", async (e) => {
       const res = await fetch(`${url}/restore`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Restauration impossible");
-      alert("Sauvegarde restaurée. L'application va se recharger.");
-      location.reload();
+      toast("Sauvegarde restaurée : l'application se recharge…", "ok");
+      setTimeout(() => location.reload(), 1200);
     } catch (err) {
       backupMsg.textContent = "⚠️ " + err.message;
     }

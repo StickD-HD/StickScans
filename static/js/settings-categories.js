@@ -13,9 +13,9 @@ async function loadCategoryManageList() {
     const li = document.createElement("li");
     li.className = "category-manage-row";
     li.innerHTML = `
-      <input type="text" value="${escapeHtml(c.name)}" data-id="${c.id}">
-      <button class="rename-cat-btn" data-id="${c.id}">✓</button>
-      <button class="delete-cat-btn" data-id="${c.id}">🗑</button>
+      <input type="text" value="${escapeHtml(c.name)}" data-id="${c.id}" aria-label="Nom de la catégorie">
+      <button class="rename-cat-btn icon-btn" type="button" data-id="${c.id}" title="Renommer" aria-label="Renommer">${icon("check")}</button>
+      <button class="delete-cat-btn icon-btn danger-icon" type="button" data-id="${c.id}" title="Supprimer" aria-label="Supprimer">${icon("trash")}</button>
     `;
     categoryManageList.appendChild(li);
   }
@@ -27,6 +27,7 @@ async function loadCategoryManageList() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: input.value.trim() }),
       });
+      toast("Catégorie renommée.", "ok");
       loadCategorySelect();
       if (currentSeriesId) loadSeriesCategories();
     });
