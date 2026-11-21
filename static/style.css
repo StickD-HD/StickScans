@@ -841,3 +841,26 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
 }
 #chapters-toolbar button { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
 .popover button, .popover a { white-space: nowrap; }
+
+/* Fiche : couverture toujours au même format (2:3, comme dans la bibliothèque). Sans align-self, la couverture
+   s'étirait à la hauteur du bloc d'informations : plus allongée avec un titre long. */
+#detail-cover { align-self: flex-start; height: auto; aspect-ratio: 2 / 3; object-position: center top; }
+
+/* Fiche : AniList sur toute la largeur, puis « Dans la bibliothèque » à gauche et « Scan-Manga » à droite */
+#detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+#detail-actions #anilist-action-btn { grid-column: 1 / -1; order: 0; }
+#detail-actions #library-btn { order: 1; }
+#detail-actions #detail-source-btn { order: 2; }
+
+/* Chapitres non lus alors qu'un chapitre plus loin est lu (chapitre sauté) */
+.chapter-row.skipped .chapter-number { color: var(--error); }
+.chapter-tag.skipped-tag { color: var(--error); border-color: var(--error); }
+.chapter-tag + .chapter-tag { margin-left: 6px; }
+#skipped-banner {
+  flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--error);
+  font-size: 0.82rem;
+}
+#skipped-text { flex: 1 1 180px; }
+#skipped-text b { color: var(--error); }
+#skipped-banner button { padding: 8px 14px; font-size: 0.8rem; }

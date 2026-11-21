@@ -174,13 +174,21 @@ async function loadChapters() {
     ? `<strong>${total}</strong> chapitre${total > 1 ? "s" : ""}`
     : "";
 
+  // Chapitres sautés : non lus alors qu'un chapitre plus loin est déjà lu (ex. le 6 non lu, la suite lue).
+  const readNumbers = currentChapters.filter((c) => c.is_read).map((c) => c.number_float);
+  const furthestRead = readNumbers.length ? Math.max(...readNumbers) : null;
+  const skipped = furthestRead === null ? [] : currentChapters.filter((c) => !c.is_read && c.number_float < furthestRead);
+  renderSkippedBanner(skipped, currentChapters.find((c) => c.is_read && c.number_float === furthestRead));
+
   chaptersList.innerHTML = "";
   for (const c of currentChapters) {
     const li = document.createElement("li");
     const isSelected = selectedChapterIds.has(c.id);
     const noLink = c.link_type === "aucun" || !c.url;
-    const linkTag = noLink ? '<span class="chapter-tag">pas de lien</span>' : "";
-    li.className = "chapter-row" + (c.is_read ? " read" : "") + (isSelected ? " selected" : "") + (noLink ? " no-link" : "");
+    const isSkipped = furthestRead !== null && !c.is_read && c.number_float < furthestRead;
+    const linkTag = (isSkipped ? '<span class="chapter-tag skipped-tag" title="Non lu alors que la suite est lue">non lu</span>' : "") +
+      (noLink ? '<span class="chapter-tag">pas de lien</span>' : "");
+    li.className = "chapter-row" + (c.is_read ? " read" : "") + (isSelected ? " selected" : "") + (noLink ? " no-link" : "") + (isSkipped ? " skipped" : "");
 
     if (selectionMode) {
       li.innerHTML = `
@@ -223,9 +231,7 @@ async function loadChapters() {
           }
         }
         await toggleChapterRead(c.id, isRead);
-        li.classList.toggle("read", isRead);
-        c.is_read = isRead;
-        updateContinueReadingButton();
+        await loadChapters(); // redessine la liste : chapitres sautés, bouton « Continuer la lecture »
       });
       li.addEventListener("click", () => {
         if (noLink) return; // rien à ouvrir : on peut quand même cocher le chapitre comme lu
@@ -648,4 +654,37 @@ urlChangeBtn.addEventListener("click", async () => {
     urlChangeBtn.disabled = false;
     urlChangeBtn.textContent = "Remplacer";
   }
+});
+
+
+// --- Bandeau des chapitres sautés (au-dessus de la liste) ---
+const skippedBanner = document.getElementById("skipped-banner");
+const skippedText = document.getElementById("skipped-text");
+const skippedReadBtn = document.getElementById("skipped-read-btn");
+let skippedIds = [];
+
+function renderSkippedBanner(skipped, furthest) {
+  skippedIds = skipped.map((c) => c.id);
+  skippedBanner.classList.toggle("hidden", skipped.length === 0);
+  if (!skipped.length) return;
+  const n = skipped.length;
+  const sorted = [...skipped].sort((a, b) => a.number_float - b.number_float);
+  const which = n <= 3
+    ? `chapitre${n > 1 ? "s" : ""} ${sorted.map((c) => escapeHtml(c.number)).join(", ")}`
+    : `${n} chapitres (du ${escapeHtml(sorted[0].number)} au ${escapeHtml(sorted[n - 1].number)})`;
+  skippedText.innerHTML = `<b>${icon("alert")} Non lu${n > 1 ? "s" : ""} :</b> ${which}, alors que tu as lu jusqu'au chapitre ${escapeHtml(furthest ? furthest.number : "")}.`;
+}
+
+skippedReadBtn.addEventListener("click", async () => {
+  if (!skippedIds.length) return;
+  const n = skippedIds.length;
+  if (!confirm(`Marquer ${n > 1 ? `ces ${n} chapitres` : "ce chapitre"} comme lu${n > 1 ? "s" : ""} ?`)) return;
+  await fetch("/api/chapters/bulk-read", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chapter_ids: skippedIds, is_read: true }),
+  });
+  toast(`${n} chapitre${n > 1 ? "s" : ""} marqué${n > 1 ? "s" : ""} comme lu${n > 1 ? "s" : ""}.`, "ok");
+  loadChapters();
+  scheduleAnilistRefresh();
 });
