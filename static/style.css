@@ -869,3 +869,13 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
 .swiping { will-change: transform; box-shadow: -18px 0 36px rgba(0, 0, 0, 0.45); }
 .swipe-settle { transition: transform 0.16s ease-out; box-shadow: -18px 0 36px rgba(0, 0, 0, 0.45); }
 @media (prefers-reduced-motion: reduce) { .swipe-settle { transition: none; } }
+
+/* Recherche de la bibliothèque : deuxième ligne de l'en-tête (toujours visible, jamais coupée) */
+#library-view header { flex-wrap: wrap; row-gap: 12px; }
+#search-bar { flex: 1 1 100%; padding: 0; }
+
+/* Fiche : « Continuer la lecture » centré entre les genres et la liste des chapitres (20 px au-dessus et au-dessous) */
+.genres-line { margin-bottom: 20px; }
+#continue-reading-btn { margin: 0; }
+#detail-panel { padding-bottom: 0; }
+#chapters-head { padding-top: 20px; }
