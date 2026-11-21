@@ -864,3 +864,8 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
 #skipped-text { flex: 1 1 180px; }
 #skipped-text b { color: var(--error); }
 #skipped-banner button { padding: 8px 14px; font-size: 0.8rem; }
+
+/* Balayage vers la droite pour revenir : l'écran suit le doigt, puis part ou revient en place */
+.swiping { will-change: transform; box-shadow: -18px 0 36px rgba(0, 0, 0, 0.45); }
+.swipe-settle { transition: transform 0.16s ease-out; box-shadow: -18px 0 36px rgba(0, 0, 0, 0.45); }
+@media (prefers-reduced-motion: reduce) { .swipe-settle { transition: none; } }

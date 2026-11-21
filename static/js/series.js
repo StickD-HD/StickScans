@@ -76,7 +76,7 @@ async function openChaptersView(seriesId) {
     Object.values(topViews).forEach((v) => v.classList.add("hidden"));
     chaptersView.classList.remove("hidden");
     window.scrollTo(0, 0);
-    pushLayer({ detail: true, close: closeDetailUI });
+    pushLayer({ detail: true, view: chaptersView, close: closeDetailUI });
   }
   await loadSeriesDetail();
   await loadChapters();
@@ -380,7 +380,7 @@ function closeDetailUI() {
 
 function backToLibrary() {
   const top = layers[layers.length - 1];
-  if (top && top.detail) history.back();
+  if (top && top.detail) closeTopLayer();
   else closeDetailUI();
 }
 

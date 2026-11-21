@@ -141,10 +141,8 @@ async function loadChecks() {
 }
 
 document.getElementById("open-checks-btn").addEventListener("click", () => {
-  goToTopView("checks-view");
-  navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === "settings-view"));
-  lastTopView = "settings-view";
+  openSettingsSubview("checks-view");
   loadChecks();
 });
-document.getElementById("checks-back-btn").addEventListener("click", () => goToTopView("settings-view"));
+document.getElementById("checks-back-btn").addEventListener("click", () => closeTopLayer());
 document.getElementById("checks-refresh-btn").addEventListener("click", loadChecks);

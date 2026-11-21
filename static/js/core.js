@@ -53,11 +53,12 @@ let viewBeforeDetail = "library-view";
 let scrollBeforeDetail = 0;
 
 // --- Navigation « retour » ---
-// Chaque écran secondaire (fiche série, popups) est une « couche » liée à une entrée d'historique :
-// le geste retour d'Android, le balayage depuis le bord sur iOS et le bouton « Retour » ferment
-// tous la couche du dessus. close() ne touche qu'à l'affichage.
+// Chaque écran secondaire (fiche série, popups, pages de Réglages, Vérifications, Aperçu de lecture) est une
+// « couche » liée à une entrée d'historique : le geste retour d'Android, le balayage vers la droite et les boutons
+// « Retour » ferment la couche du dessus. close() ne touche qu'à l'affichage ; view = élément qui glisse sous le doigt.
 const layers = [];
 let lastPopAt = 0;
+let silentPops = 0; // retours d'historique lancés par l'appli après avoir déjà fermé la couche elle-même
 
 function pushLayer(layer) {
   layers.push(layer);
@@ -66,20 +67,59 @@ function pushLayer(layer) {
 
 window.addEventListener("popstate", (e) => {
   lastPopAt = Date.now();
+  if (silentPops > 0) {
+    silentPops--;
+    return; // la couche est déjà fermée : on remettait seulement l'historique en accord
+  }
   const depth = (e.state && e.state.layer) || 0;
   while (layers.length > depth) layers.pop().close();
 });
 
+// Ferme la couche du dessus TOUT DE SUITE, puis met l'historique à jour (sans attendre le navigateur, parfois lent
+// à répondre dans l'appli installée sur iPhone).
+function closeTopLayer() {
+  const top = layers.pop();
+  if (!top) return false;
+  top.close();
+  silentPops++;
+  history.back();
+  return true;
+}
+
+// Changement d'onglet (barre du bas) : les couches ouvertes sont abandonnées sans être rejouées.
+function dropAllLayers() {
+  if (!layers.length) return;
+  const n = layers.length;
+  layers.length = 0;
+  silentPops++;
+  history.go(-n);
+}
+
 function openModal(el) {
   if (!el.classList.contains("hidden")) return;
   el.classList.remove("hidden");
-  pushLayer({ el, close: () => el.classList.add("hidden") });
+  pushLayer({ el, view: el.firstElementChild, close: () => el.classList.add("hidden") });
 }
 
 function closeModal(el) {
   const top = layers[layers.length - 1];
-  if (top && top.el === el) history.back();
+  if (top && top.el === el) closeTopLayer();
   else el.classList.add("hidden");
+}
+
+// Écran secondaire ouvert depuis Réglages (Vérifications, Aperçu de lecture) : retour vers Réglages.
+function openSettingsSubview(viewId) {
+  goToTopView(viewId);
+  navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === "settings-view"));
+  lastTopView = "settings-view";
+  window.scrollTo(0, 0);
+  pushLayer({
+    view: topViews[viewId],
+    close: () => {
+      goToTopView("settings-view");
+      window.scrollTo(0, 0);
+    },
+  });
 }
 
 function escapeHtml(str) {
@@ -152,6 +192,7 @@ function goToTopView(viewId) {
 
 navButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
+    dropAllLayers();
     goToTopView(btn.dataset.view);
     if (btn.dataset.view === "updates-view") loadUpdates();
     if (btn.dataset.view === "history-view") loadHistory();
@@ -182,36 +223,69 @@ function setupPopover(button, menu) {
   return close;
 }
 
-// ----- Retour par balayage vers la droite (fiche série et popups) -----
-let swipeStart = null;
+// ----- Retour par balayage vers la droite (tous les écrans qui ont un bouton « Retour », et les popups) -----
+// L'écran suit le doigt ; au-delà d'un tiers de l'écran (ou d'un geste rapide), il part et la couche se ferme tout de
+// suite. Dès que le geste est reconnu comme horizontal, le défilement vertical est bloqué : le navigateur ne peut plus
+// « voler » le geste en faisant défiler la page (c'est ce qui le rendait capricieux).
+const SWIPE_DECIDE_PX = 10;
+let swipe = null;
+
+function swipeTarget() {
+  const top = layers[layers.length - 1];
+  return top ? top.view || null : null;
+}
 
 document.addEventListener("touchstart", (e) => {
-  swipeStart = null;
+  swipe = null;
   if (!layers.length || e.touches.length !== 1) return;
+  if (e.target.closest("input, textarea, select, .no-swipe")) return;
   const t = e.touches[0];
-  if (t.clientX > window.innerWidth * 0.4) return;
-  if (e.target.closest("input, textarea, select")) return;
-  swipeStart = { x: t.clientX, y: t.clientY };
+  swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, horizontal: null, el: swipeTarget() };
 }, { passive: true });
 
-document.addEventListener("touchend", (e) => {
-  if (!swipeStart) return;
-  const t = e.changedTouches[0];
-  const dx = t.clientX - swipeStart.x;
-  const dy = t.clientY - swipeStart.y;
-  const fromEdge = swipeStart.x <= 24;
-  swipeStart = null;
-  if (dx < 80 || Math.abs(dy) > dx * 0.5 || !layers.length) return;
-  if (fromEdge) {
-    // Depuis le bord, le navigateur gère parfois déjà le geste (popstate) : on vérifie avant d'agir.
-    const before = lastPopAt;
-    setTimeout(() => { if (lastPopAt === before && layers.length) history.back(); }, 350);
-  } else {
-    history.back();
+document.addEventListener("touchmove", (e) => {
+  if (!swipe || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const dx = t.clientX - swipe.x;
+  const dy = t.clientY - swipe.y;
+  if (swipe.horizontal === null) {
+    if (Math.abs(dx) < SWIPE_DECIDE_PX && Math.abs(dy) < SWIPE_DECIDE_PX) return;
+    swipe.horizontal = dx > 0 && dx > Math.abs(dy) * 1.2;
+    if (!swipe.horizontal) {
+      swipe = null; // geste vertical (défilement) ou vers la gauche : on laisse faire
+      return;
+    }
+    if (swipe.el) swipe.el.classList.add("swiping");
   }
-}, { passive: true });
+  e.preventDefault(); // geste horizontal reconnu : pas de défilement en même temps
+  swipe.dx = Math.max(0, dx);
+  if (swipe.el) swipe.el.style.transform = `translateX(${swipe.dx}px)`;
+}, { passive: false });
 
-document.addEventListener("touchcancel", () => { swipeStart = null; }, { passive: true });
+function endSwipe(cancelled) {
+  const s = swipe;
+  swipe = null;
+  if (!s || !s.horizontal) return;
+  const el = s.el;
+  const speed = s.dx / Math.max(1, Date.now() - s.t); // px/ms
+  const go = !cancelled && lastPopAt < s.t && (s.dx > window.innerWidth / 3 || (s.dx > 50 && speed > 0.35));
+  if (!el) {
+    if (go) closeTopLayer();
+    return;
+  }
+  el.classList.remove("swiping");
+  el.classList.add("swipe-settle");
+  el.style.transform = go ? "translateX(100%)" : "translateX(0)";
+  const done = () => {
+    el.classList.remove("swipe-settle");
+    el.style.transform = "";
+    if (go && layers.length && swipeTarget() === el) closeTopLayer();
+  };
+  setTimeout(done, go ? 160 : 180);
+}
+
+document.addEventListener("touchend", () => endSwipe(false), { passive: true });
+document.addEventListener("touchcancel", () => endSwipe(true), { passive: true });
 
 // --- Statuts de série : couleur selon l'état ---
 function statusClass(status) {

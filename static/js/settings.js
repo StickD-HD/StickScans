@@ -33,18 +33,30 @@ function showSettingsPage(name) {
   if (name && SETTINGS_PAGE_LOADERS[name]) SETTINGS_PAGE_LOADERS[name]();
 }
 
+// Ouvre une page de Réglages (Affichage, Catégories...) comme une couche : « Retour », balayage et retour Android
+// ramènent à la liste des rubriques.
+function openSettingsSubpage(name) {
+  showSettingsPage(name);
+  pushLayer({ settingsPage: true, view: settingsView, close: () => showSettingsPage(null) });
+}
+
 function openSettingsPage(name) {
+  dropAllLayers();
   goToTopView("settings-view");
   navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === "settings-view"));
   lastTopView = "settings-view";
-  showSettingsPage(name);
+  openSettingsSubpage(name);
 }
 
 settingsHome.addEventListener("click", (e) => {
   const row = e.target.closest("[data-page]");
-  if (row) showSettingsPage(row.dataset.page);
+  if (row) openSettingsSubpage(row.dataset.page);
 });
-settingsBackBtn.addEventListener("click", () => showSettingsPage(null));
+settingsBackBtn.addEventListener("click", () => {
+  const top = layers[layers.length - 1];
+  if (top && top.settingsPage) closeTopLayer();
+  else showSettingsPage(null);
+});
 
 // Version qui tourne (écrite par outils/deploy.sh), en bas de la liste des rubriques.
 fetch("/api/version").then((r) => r.json()).then((v) => {

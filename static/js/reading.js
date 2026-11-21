@@ -9,12 +9,10 @@ const READING_PERIODS = [["week", "Semaine"], ["month", "Mois"], ["all", "Tout"]
 const READING_PERIOD_LABELS = { week: "7 derniers jours", month: "30 derniers jours", all: "Depuis le début" };
 
 document.getElementById("open-reading-btn").addEventListener("click", () => {
-  goToTopView("reading-view");
-  navButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === "settings-view"));
-  lastTopView = "settings-view";
+  openSettingsSubview("reading-view");
   loadReadingOverview();
 });
-document.getElementById("reading-back-btn").addEventListener("click", () => goToTopView("settings-view"));
+document.getElementById("reading-back-btn").addEventListener("click", () => closeTopLayer());
 
 function fmtReadingTime(minutes) {
   const m = Math.round(minutes);
