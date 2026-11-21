@@ -30,3 +30,8 @@ form.addEventListener("submit", async (e) => {
     submitBtn.disabled = false;
   }
 });
+
+// Pas de zoom par pincement (Safari ignore user-scalable=no) : comme dans le reste de l'appli.
+for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+}

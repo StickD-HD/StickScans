@@ -882,3 +882,7 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
 
 /* En-tête de la bibliothèque : la vraie icône de l'appli (celle de l'écran d'accueil du téléphone) */
 img.brand-mark { display: block; width: 32px; height: 32px; padding: 0; background: none; border-radius: 22%; box-shadow: none; }
+
+/* Pas de zoom au double tap (le pincement et le zoom à l'entrée dans un champ sont bloqués par la balise viewport
+   et par core.js) */
+html { touch-action: manipulation; }

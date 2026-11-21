@@ -363,3 +363,9 @@ document.addEventListener("keydown", (e) => {
     el.click();
   }
 });
+
+// --- Pas de zoom par pincement : Safari (iPhone) ignore user-scalable=no de la balise viewport, on bloque donc
+// directement ses gestes de zoom. Le défilement et le balayage de retour ne sont pas concernés.
+for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+}
