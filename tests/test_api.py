@@ -72,3 +72,10 @@ def test_maintenance_refusee_pendant_une_verification(check_running):
     with pytest.raises(RuntimeError):
         with scraper.maintenance():
             pass
+
+
+def test_version_deployee(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "VERSION_FILE", tmp_path / "VERSION")
+    assert main.app_version() == {"commit": None, "date": None, "subject": None}  # lancé hors déploiement
+    (tmp_path / "VERSION").write_text("abc1234|2026-11-21 21:10|Message avec | dedans\n", encoding="utf-8")
+    assert main.app_version() == {"commit": "abc1234", "date": "2026-11-21 21:10", "subject": "Message avec | dedans"}

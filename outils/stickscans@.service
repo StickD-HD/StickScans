@@ -1,0 +1,39 @@
+# Service systemd StickScans, une instance par personne : stickscans@<nom> lit /etc/stickscans-<nom>.env
+# et tourne dans /opt/stickscans/<nom>. Installation :
+#   cp /git/StickScans/outils/stickscans@.service /etc/systemd/system/ && systemctl daemon-reload
+[Unit]
+Description=StickScans (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=stickscans
+WorkingDirectory=/opt/stickscans/%i
+# Adresse d'écoute : à remplacer par HOST=127.0.0.1 dans /etc/stickscans-<nom>.env si le reverse proxy (ou
+# cloudflared) tourne sur cette même machine : l'appli n'est alors plus joignable directement depuis le réseau.
+Environment=HOST=0.0.0.0
+EnvironmentFile=/etc/stickscans-%i.env
+# Un seul processus, impérativement : les vérifications et les sauvegardes sont planifiées dans l'appli ;
+# avec plusieurs workers, chacune partirait en double.
+ExecStart=/opt/stickscans/venv/bin/uvicorn app.main:app --host ${HOST} --port ${PORT} --workers 1
+Restart=on-failure
+RestartSec=5
+# L'appli s'arrête en une seconde (attentes interrompues) ; au-delà de 30 s, systemd force l'arrêt.
+TimeoutStopSec=30
+
+# Protections : l'appli ne peut écrire que dans son dossier data/ et dans le dossier partagé du cache.
+# Si SCRAPE_CACHE_DIR pointe ailleurs que /opt/stickscans/cache, adapte la ligne ReadWritePaths.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/stickscans/%i/data -/opt/stickscans/cache
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

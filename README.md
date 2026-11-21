@@ -38,48 +38,28 @@ python3 -m venv /opt/stickscans/venv
 /opt/stickscans/venv/bin/pip install -r /git/StickScans/requirements.txt   # versions figées et testées
 ```
 
-**3. Script de déploiement** (copie le code du dépôt vers chaque instance, sans toucher à `data/`)
+**3. Instance** : dossier et réglages (le nom `moi` est un exemple)
 ```bash
-cat > /opt/stickscans/deploy.sh <<'EOF'
-#!/bin/sh
-for i in moi; do          # ajoute ici le nom de chaque instance
-  rm -rf /opt/stickscans/$i/app /opt/stickscans/$i/static
-  cp -r /git/StickScans/app /git/StickScans/static /opt/stickscans/$i/
-done
-chown -R stickscans: /opt/stickscans
-EOF
-chmod +x /opt/stickscans/deploy.sh
-/opt/stickscans/deploy.sh
-```
-
-**4. Réglages de l'instance** : copie `.env.example` vers `/etc/stickscans-moi.env`, adapte-le, puis
-```bash
+mkdir -p /opt/stickscans/moi/data
+cp /git/StickScans/.env.example /etc/stickscans-moi.env    # puis adapte-le
 chmod 600 /etc/stickscans-moi.env
 ```
 
-**5. Service systemd**
+**4. Service systemd** (fourni dans le dépôt, avec ses protections)
 ```bash
-cat > /etc/systemd/system/stickscans@.service <<'EOF'
-[Unit]
-Description=StickScans (%i)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=stickscans
-WorkingDirectory=/opt/stickscans/%i
-EnvironmentFile=/etc/stickscans-%i.env
-ExecStart=/opt/stickscans/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
+cp /git/StickScans/outils/stickscans@.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now stickscans@moi
+systemctl enable stickscans@moi
 ```
 
-Ouvre ensuite `http://IP-DU-SERVEUR:<PORT>`.
+**5. Premier déploiement**
+```bash
+git -C /git/StickScans config user.name "TonPseudoGitHub"
+git -C /git/StickScans config user.email "ton@mail"
+bash /git/StickScans/outils/maj.sh
+```
+
+Ouvre ensuite `http://IP-DU-SERVEUR:<PORT>` (ou ton adresse publique, voir « Accès depuis Internet »).
 
 ## Gestion au quotidien
 
@@ -92,13 +72,35 @@ tail -30 /opt/stickscans/moi/data/logs/scrape.log  # journal des vérifications
 
 ## Mise à jour
 
+Une seule commande, en root : elle applique le zip de modifications, installe les dépendances, lance les tests,
+commite, pousse sur GitHub, déploie le commit sur toutes les instances, les redémarre et vérifie qu'elles répondent.
 ```bash
-cd /git/StickScans && git pull
-/opt/stickscans/venv/bin/pip install -r requirements-dev.txt   # seulement si requirements*.txt a changé
-/opt/stickscans/venv/bin/python -m pytest -q                    # facultatif : tests
-/opt/stickscans/deploy.sh
-systemctl restart stickscans@moi
+bash /git/StickScans/outils/maj.sh /root/lot.zip     # avec un zip (à déposer hors du dépôt, ex. /root)
+bash /git/StickScans/outils/maj.sh                   # sans zip : modifications faites directement dans le dépôt
 ```
+- Si un test échoue, **rien n'est commité ni déployé** ; la commande pour annuler s'affiche.
+- Un zip peut contenir `MESSAGE.txt` (message du commit) et `SUPPRIMER.txt` (fichiers à supprimer, un par ligne).
+- Seul le contenu commité est déployé ; la version qui tourne est affichée en bas de **Réglages**.
+- Revenir à une version précédente : `bash /git/StickScans/outils/deploy.sh <commit>` puis
+  `systemctl restart stickscans@moi` (le commit est affiché par `git log --oneline`).
+- Les instances sont trouvées toutes seules (une par fichier `/etc/stickscans-<nom>.env`).
+
+## Accès depuis Internet (Cloudflare Tunnel)
+
+Dans chaque `/etc/stickscans-<nom>.env` :
+```
+# Refuse de démarrer sans mot de passe
+AUTH_REQUIRED=true
+# Cookie de connexion envoyé seulement en HTTPS
+AUTH_COOKIE_SECURE=true
+# Vraie adresse du visiteur (en-tête posé par Cloudflare), pour bloquer les essais de mot de passe
+TRUST_CF_CONNECTING_IP=true
+# Seulement si cloudflared / le reverse proxy tourne sur CETTE machine
+HOST=127.0.0.1
+```
+Attention : pas de commentaire en fin de ligne dans ces fichiers, systemd l'inclurait dans la valeur.
+Sans `TRUST_CF_CONNECTING_IP`, tous les visiteurs semblent venir du tunnel : 5 mauvais mots de passe tapés par
+n'importe qui bloquent la connexion pour tout le monde, toi compris, pendant 15 minutes.
 
 ## Structure du code
 
@@ -120,10 +122,11 @@ cd /git/StickScans && /opt/stickscans/venv/bin/python -m pytest -q
 
 ## Plusieurs instances
 
-Chaque personne a son instance (sa base, son compte, son port). Pour en ajouter une : crée
-`/opt/stickscans/<nom>`, ajoute `<nom>` dans la boucle de `deploy.sh`, écris `/etc/stickscans-<nom>.env` avec un
-autre `PORT`, puis `systemctl enable --now stickscans@<nom>`. Donne à toutes le même `SCRAPE_CACHE_DIR` : elles se
-partagent alors les pages récupérées, l'espacement des requêtes, le plafond quotidien et la pause après un refus.
+Chaque personne a son instance (sa base, son compte, son port). Pour en ajouter une : crée `/opt/stickscans/<nom>/data`,
+écris `/etc/stickscans-<nom>.env` avec un autre `PORT`, `systemctl enable stickscans@<nom>`, puis lance `maj.sh`.
+Donne à toutes le même `SCRAPE_CACHE_DIR` : elles se partagent alors les pages récupérées, l'espacement des
+requêtes, le plafond quotidien et la pause après un refus. Une instance = un seul processus (jamais plusieurs
+workers : les vérifications partiraient en double).
 
 ## Réglages (fichier `/etc/stickscans-<instance>.env`)
 
@@ -133,6 +136,7 @@ partagent alors les pages récupérées, l'espacement des requêtes, le plafond 
 | `AUTH_USERNAME` / `AUTH_PASSWORD` | identifiants (sans mot de passe, l'appli est ouverte à tous) | `admin` / vide |
 | `AUTH_REQUIRED` | `true` : refuse de démarrer sans mot de passe | `false` |
 | `AUTH_COOKIE_SECURE` | `true` derrière un reverse proxy HTTPS | `false` |
+| `HOST` | adresse d'écoute (`127.0.0.1` : seulement depuis cette machine) | `0.0.0.0` |
 | `FETCH_MIN_GAP_SECONDS` / `FETCH_MAX_GAP_SECONDS` | écart aléatoire entre deux requêtes vers le site, toutes instances confondues (jamais moins de 20 s) | 45 / 90 |
 | `FETCH_DAILY_LIMIT` | requêtes vers le site par jour (UTC), toutes instances confondues | 300 |
 | `FETCH_CONTACT` | adresse ajoutée au User-Agent (facultatif) | vide |

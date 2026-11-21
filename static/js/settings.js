@@ -45,3 +45,12 @@ settingsHome.addEventListener("click", (e) => {
   if (row) showSettingsPage(row.dataset.page);
 });
 settingsBackBtn.addEventListener("click", () => showSettingsPage(null));
+
+// Version qui tourne (écrite par outils/deploy.sh), en bas de la liste des rubriques.
+fetch("/api/version").then((r) => r.json()).then((v) => {
+  if (!v.commit) return;
+  const when = v.date ? new Date(v.date.replace(" ", "T")).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "";
+  const el = document.getElementById("app-version");
+  el.textContent = `Version ${v.commit}${when ? " du " + when : ""}`;
+  el.title = v.subject || "";
+}).catch(() => {});

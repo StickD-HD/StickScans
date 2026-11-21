@@ -35,6 +35,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("manhwa-tracker")
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
+# Écrit par outils/deploy.sh dans le dossier de l'instance : « commit|date|message » de la version qui tourne.
+VERSION_FILE = Path(__file__).parent.parent / "VERSION"
 
 scheduler = BackgroundScheduler()
 
@@ -225,6 +227,15 @@ def auth_status(request: Request):
         "enabled": auth.is_enabled(),
         "authenticated": (not auth.is_enabled()) or auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)),
     }
+
+
+@app.get("/api/version")
+def app_version():
+    try:
+        commit, date, subject = (VERSION_FILE.read_text(encoding="utf-8").strip().split("|", 2) + ["", ""])[:3]
+    except OSError:
+        return {"commit": None, "date": None, "subject": None}
+    return {"commit": commit or None, "date": date or None, "subject": subject or None}
 
 
 @app.get("/api/series")
