@@ -118,6 +118,41 @@ async def require_auth(request: Request, call_next):
     return RedirectResponse(f"/login?next={quote(target, safe='')}", status_code=303)
 
 
+# En-têtes de sécurité, sur toutes les réponses (l'appli est exposée sur Internet). La politique de contenu (CSP)
+# n'autorise que les scripts servis par l'appli elle-même : même si un titre ou un synopsis venu du site contenait
+# du code et qu'un affichage oubliait de l'échapper, le navigateur refuserait de l'exécuter.
+# Images : https (couvertures scan-manga et AniList) et data: (aperçu de l'affichage).
+CONTENT_SECURITY_POLICY = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' https: data:",
+    "connect-src 'self'",
+    "manifest-src 'self'",
+    "worker-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+SECURITY_HEADERS = {
+    "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+}
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
 @app.middleware("http")
 async def never_serve_stale_pages(request: Request, call_next):
     """Pages et fichiers de l'appli : toujours revérifiés auprès du serveur (jamais de vieille copie).

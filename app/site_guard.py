@@ -17,6 +17,7 @@ import fcntl
 import json
 import os
 import random
+import tempfile
 import threading
 import time
 from contextlib import contextmanager
@@ -47,9 +48,12 @@ def _state():
     folder = state_dir()
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / STATE_FILE
-    with _thread_lock, open(folder / (STATE_FILE + ".lock"), "a+") as lock_file:
-        fcntl.flock(lock_file, fcntl.LOCK_EX)
+    # Verrou ouvert en LECTURE seule : ça suffit pour flock, et ça marche même si le fichier a été créé par un autre
+    # utilisateur (un outil lancé en root, par exemple) ; l'ouvrir en écriture échouerait pour le service.
+    with _thread_lock:
+        lock_fd = os.open(folder / (STATE_FILE + ".lock"), os.O_RDONLY | os.O_CREAT, 0o644)
         try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
             try:
                 state = json.loads(path.read_text(encoding="utf-8"))
                 if not isinstance(state, dict):
@@ -57,11 +61,19 @@ def _state():
             except (OSError, ValueError):
                 state = {}
             yield state
-            tmp = path.with_name(path.name + ".tmp")
-            tmp.write_text(json.dumps(state), encoding="utf-8")
-            os.replace(tmp, path)
+            # Fichier temporaire propre à cet appel, lisible par tous, puis remplacement atomique : un autre
+            # utilisateur peut toujours relire l'état, et un fichier temporaire abandonné ne bloque personne.
+            fd, tmp = tempfile.mkstemp(prefix=STATE_FILE + ".", suffix=".tmp", dir=folder)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(json.dumps(state))
+                os.chmod(tmp, 0o644)
+                os.replace(tmp, path)
+            except BaseException:
+                Path(tmp).unlink(missing_ok=True)
+                raise
         finally:
-            fcntl.flock(lock_file, fcntl.LOCK_UN)
+            os.close(lock_fd)  # libère aussi le verrou
 
 
 def _day(ts: float) -> str:

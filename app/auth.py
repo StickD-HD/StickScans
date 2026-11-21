@@ -53,6 +53,7 @@ PUBLIC_PATHS = {
     "/manifest.json",
     "/sw.js",
     "/static/style.css",
+    "/static/login.js",
 }
 PUBLIC_PREFIXES = ("/static/icons/",)
 
