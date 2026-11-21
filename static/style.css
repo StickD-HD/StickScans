@@ -879,3 +879,6 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
 #continue-reading-btn { margin: 0; }
 #detail-panel { padding-bottom: 0; }
 #chapters-head { padding-top: 20px; }
+
+/* En-tête de la bibliothèque : la vraie icône de l'appli (celle de l'écran d'accueil du téléphone) */
+img.brand-mark { display: block; width: 32px; height: 32px; padding: 0; background: none; border-radius: 22%; }
