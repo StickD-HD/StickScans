@@ -23,6 +23,8 @@ const filterBadge = document.getElementById("filter-badge");
 const refreshAllLabel = document.getElementById("refresh-all-label");
 const randomSeriesBtn = document.getElementById("random-series-btn");
 let libraryShown = []; // séries actuellement affichées dans la bibliothèque (donc déjà filtrées)
+let librarySelecting = false; // mode sélection de séries (voir library-select.js)
+let librarySelected = new Set();
 const updatesRefreshBtn = document.getElementById("updates-refresh-btn");
 const updatesRefreshStatus = document.getElementById("updates-refresh-status");
 let searchDebounce = null;
@@ -157,15 +159,21 @@ async function loadLibrary() {
     emptyAddBtn.classList.toggle("hidden", filtered);
   }
 
+  // En mode sélection, les séries qui ne sont plus affichées (filtre, recherche) sortent de la sélection.
+  const shownIds = new Set(series.map((s) => s.id));
+  librarySelected = new Set([...librarySelected].filter((id) => shownIds.has(id)));
+
   for (const s of series) {
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "card" + (librarySelected.has(s.id) ? " selected" : "");
+    card.dataset.id = s.id;
     card.tabIndex = 0;
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", `${s.title || "Sans titre"}${s.unread_count > 0 ? `, ${s.unread_count} chapitre${s.unread_count > 1 ? "s" : ""} non lu${s.unread_count > 1 ? "s" : ""}` : ""}`);
     card.innerHTML = `
       <div class="cover-wrap">
         <img src="${escapeHtml(s.cover_url)}" alt="" loading="lazy">
+        <span class="select-mark" aria-hidden="true">${icon("check")}</span>
         <div class="badge-stack">
           ${s.unread_count > 0 ? `<span class="badge">${s.unread_count}</span>` : ""}
           ${s.last_error ? `<span class="badge badge-error" title="${escapeHtml(s.last_error)}">${icon("alert")}</span>` : ""}
@@ -176,9 +184,13 @@ async function loadLibrary() {
         <div class="chapter">${s.last_chapter_number ? "Ch. " + escapeHtml(s.last_chapter_number) : "?"}</div>
       </div>
     `;
-    card.addEventListener("click", () => openChaptersView(s.id));
+    card.addEventListener("click", () => {
+      if (librarySelecting) toggleLibrarySelection(s.id, card);
+      else openChaptersView(s.id);
+    });
     grid.appendChild(card);
   }
+  if (librarySelecting) updateLibrarySelectionCount();
 }
 
 async function startRefreshAll() {

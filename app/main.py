@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 
-from . import anilist, auth, database
+from . import anilist, auth, database, gdrive
 from . import scraper as scraper_module
 from .parse_series import number_to_float
 from . import backup as backup_files
@@ -60,6 +60,9 @@ def scheduled_backup(overwrite: bool = True):
     cfg = _backup_settings()
     if cfg["enabled"]:
         run_backup(overwrite=overwrite, keep=cfg["keep"])
+    # Copie sur Google Drive si connecté (au plus une toutes les 20 h), sans faire attendre le démarrage.
+    if gdrive.is_connected():
+        threading.Thread(target=gdrive.upload_if_due, name="envoi-drive", daemon=True).start()
 
 
 @asynccontextmanager
@@ -194,6 +197,25 @@ class BulkReadRequest(BaseModel):
 
 class HistoryRemoveRequest(BaseModel):
     chapter_ids: list[int]
+
+
+class BulkSeriesRequest(BaseModel):
+    series_ids: list[int] = Field(min_length=1, max_length=1000)
+    action: str
+    category_id: int | None = None
+
+
+class BulkIdsRequest(BaseModel):
+    series_ids: list[int] = Field(max_length=1000)
+
+
+class GdriveClientRequest(BaseModel):
+    client_id: str
+    client_secret: str
+
+
+class GdriveSettingsRequest(BaseModel):
+    keep: int = Field(ge=1, le=30)
 
 
 class CategoryRequest(BaseModel):
@@ -355,7 +377,8 @@ def get_series(series_id: int):
     series = database.get_series_by_id(series_id)
     if not series:
         raise HTTPException(404, "Série introuvable")
-    return series
+    # Pour le temps de lecture estimé affiché sur la fiche (même réglage que l'aperçu de lecture)
+    return {**series, "minutes_per_chapter": READING_MINUTES_PER_CHAPTER}
 
 
 @app.post("/api/series")
@@ -900,6 +923,125 @@ def align_local_with_anilist(series_id: int):
         raise HTTPException(400, "AniList n'indique aucun chapitre lu pour cette série")
     changed = database.mark_read_through(series_id, float(progress))
     return {"progress": progress, "changed": changed, "series": database.get_series_by_id(series_id)}
+
+
+# --- Actions groupées sur plusieurs séries (sélection dans la bibliothèque) ---
+
+BULK_ACTIONS = {"mark_read", "mark_unread", "delete", "add_category", "remove_category"}
+
+
+@app.post("/api/series/bulk")
+def bulk_series(payload: BulkSeriesRequest, background_tasks: BackgroundTasks):
+    if payload.action not in BULK_ACTIONS:
+        raise HTTPException(400, "Action inconnue")
+    if payload.action in ("add_category", "remove_category"):
+        if not any(c["id"] == payload.category_id for c in database.get_all_categories()):
+            raise HTTPException(404, "Catégorie introuvable")
+    done = 0
+    for series_id in dict.fromkeys(payload.series_ids):  # sans doublons, dans l'ordre
+        series = database.get_series_by_id(series_id)
+        if not series:
+            continue
+        if payload.action == "mark_read":
+            database.mark_all_read(series_id)
+            if series.get("anilist_id"):
+                background_tasks.add_task(anilist.push_progress, series_id)
+        elif payload.action == "mark_unread":
+            database.mark_all_unread(series_id)  # comme pour une série seule, AniList n'est pas reculé
+        elif payload.action == "delete":
+            database.delete_series(series_id)
+        elif payload.action == "add_category":
+            database.add_series_to_category(series_id, payload.category_id)
+        else:
+            database.remove_series_from_category(series_id, payload.category_id)
+        done += 1
+    return {"ok": True, "count": done}
+
+
+@app.post("/api/series/bulk/categories")
+def bulk_series_categories(payload: BulkIdsRequest):
+    """Pour chaque catégorie : combien des séries sélectionnées y sont déjà (case cochée, partielle ou vide)."""
+    ids = set(payload.series_ids)
+    result = []
+    for c in database.get_all_categories():
+        members = database.get_category_series_ids(c["id"])
+        result.append({"id": c["id"], "name": c["name"], "count": len(ids & members), "total": len(ids)})
+    return result
+
+
+# --- Google Drive ---
+
+def _gdrive_call(fn, *args):
+    try:
+        return fn(*args)
+    except gdrive.DriveError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/gdrive")
+def gdrive_status():
+    return gdrive.get_status()
+
+
+@app.post("/api/gdrive/client")
+def gdrive_client(payload: GdriveClientRequest):
+    _gdrive_call(gdrive.save_client, payload.client_id, payload.client_secret)
+    return gdrive.get_status()
+
+
+@app.put("/api/gdrive/settings")
+def gdrive_settings(payload: GdriveSettingsRequest):
+    gdrive.set_keep(payload.keep)
+    return gdrive.get_status()
+
+
+@app.post("/api/gdrive/connect")
+def gdrive_connect():
+    return _gdrive_call(gdrive.start_connect)
+
+
+@app.post("/api/gdrive/poll")
+def gdrive_poll():
+    return _gdrive_call(gdrive.poll_connect)
+
+
+@app.delete("/api/gdrive")
+def gdrive_disconnect():
+    gdrive.disconnect()
+    return gdrive.get_status()
+
+
+@app.post("/api/gdrive/upload")
+def gdrive_upload():
+    result = _gdrive_call(gdrive.upload_now)
+    return {**gdrive.get_status(), "uploaded": result}
+
+
+@app.get("/api/gdrive/files")
+def gdrive_files():
+    return _gdrive_call(gdrive.list_files)
+
+
+@app.post("/api/gdrive/files/{file_id}/restore")
+def gdrive_restore(file_id: str):
+    """Remplace la base par une copie du Drive (copie de sécurité de la base actuelle avant). Les accès AniList et
+    Google, absents des copies envoyées, sont gardés tels qu'ils sont maintenant."""
+    tmp = database.DB_PATH.with_name(database.DB_PATH.name + ".drive.tmp")
+    try:
+        _gdrive_call(gdrive.download, file_id, tmp)
+        kept = gdrive.preserved_settings()
+        with _exclusive():
+            safe = replace_database(tmp, label="avant-restauration")
+            database.init_db()
+            gdrive.restore_settings(kept)
+            auth.forget_generation_cache()
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except FileNotFoundError:
+        raise HTTPException(404, "Copie introuvable sur le Drive")
+    finally:
+        tmp.unlink(missing_ok=True)
+    return {"status": "ok", "backup": safe.name if safe else None}
 
 
 @app.delete("/api/series/{series_id}")

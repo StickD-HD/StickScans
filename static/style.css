@@ -911,3 +911,93 @@ html { touch-action: manipulation; }
 .status-text { background: none; font-weight: 600; }
 .status-text::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 5px; vertical-align: 1px; }
 #detail-actions { margin-top: 22px; }
+
+/* --- Sélection de séries dans la bibliothèque --- */
+#library-toolbar {
+  position: fixed; z-index: 25; left: 50%; transform: translateX(-50%); width: min(100%, 980px);
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: nowrap;
+  padding: 10px 18px; background: var(--surface-high); border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+#library-toolbar.hidden { display: none !important; }
+.selection-count { font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
+#library-toolbar button { padding: 8px 12px; font-size: 0.8rem; background: var(--surface); border-color: var(--border); white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+#library-toolbar button.primary { background: var(--accent); border-color: var(--accent); color: #06101F; }
+#library-toolbar button:disabled { opacity: 0.45; }
+#library-toolbar .toolbar-close { padding: 8px 10px; }
+#library-toolbar .ico { width: 16px; height: 16px; }
+body.library-selecting #library-view { padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 76px); }
+body.library-selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 80px); }
+
+/* Appui long sur une carte : pas de menu « enregistrer l'image » d'iOS */
+#grid .card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.select-mark {
+  display: none; position: absolute; top: 6px; left: 6px; width: 24px; height: 24px; border-radius: 50%;
+  align-items: center; justify-content: center;
+  background: rgba(6, 10, 20, 0.55); border: 2px solid rgba(255, 255, 255, 0.85); color: transparent;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.select-mark .ico { width: 14px; height: 14px; stroke-width: 3; }
+body.library-selecting .select-mark { display: inline-flex; }
+body.library-selecting .card.selected .select-mark { background: var(--accent); border-color: var(--accent); color: #06101F; }
+body.library-selecting .card.selected img { outline: 2px solid var(--accent); outline-offset: 2px; }
+body.library-selecting .card:not(.selected) img { filter: brightness(0.7); }
+body.library-selecting .card .badge-stack { display: none; }
+.grid.list .select-mark { top: 50%; left: 4px; transform: translateY(-50%); }
+
+/* Feuilles d'actions groupées (même apparence que les autres feuilles du bas) */
+.sheet-modal {
+  position: fixed; inset: 0; background: rgba(4, 7, 14, 0.72); backdrop-filter: blur(4px);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 50;
+}
+.sheet-modal.hidden { display: none; }
+.sheet-modal-content {
+  background: var(--surface-high); border: 1px solid var(--border); border-bottom: none;
+  border-radius: 22px 22px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom, 0px));
+  width: 100%; max-width: 480px; max-height: 80vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.sheet-modal-content h2 { margin: 0; font-size: 1.05rem; }
+.sheet-modal-content .section-label { margin: 0; }
+.muted-inline { color: var(--muted); font-weight: 600; font-size: 0.85rem; margin-left: 4px; }
+.bulk-actions { display: flex; flex-direction: column; gap: 6px; }
+.bulk-actions button {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 13px 14px;
+  background: var(--surface); border-color: var(--border); font-size: 0.88rem;
+}
+.bulk-actions .ico { width: 18px; height: 18px; color: var(--muted); }
+.bulk-actions .danger-item, .bulk-actions .danger-item .ico { color: var(--error); }
+.bulk-category-list { display: flex; flex-direction: column; gap: 4px; }
+.bulk-category-list label { display: flex; align-items: center; gap: 10px; padding: 9px 4px; font-size: 0.88rem; }
+.bulk-category-list input { accent-color: var(--accent); width: 18px; height: 18px; }
+.bulk-category-list em { margin-left: auto; color: var(--muted); font-style: normal; font-size: 0.78rem; }
+.bulk-anilist-series { display: flex; align-items: center; gap: 12px; }
+.bulk-anilist-series img { width: 44px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: var(--surface); }
+.bulk-anilist-series strong { font-size: 0.92rem; line-height: 1.3; }
+.anilist-results { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; }
+.bulk-anilist-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.anilist-result-row { position: relative; }
+.anilist-result-row.best { background: var(--accent-soft); }
+.anilist-result-row.busy { opacity: 0.5; pointer-events: none; }
+.best-tag { margin-left: auto; font-style: normal; font-size: 0.68rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
+
+/* Réglages › Sauvegarde › Google Drive */
+.setup-help { margin-bottom: 12px; font-size: 0.8rem; color: var(--muted); }
+.setup-help summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: 4px 0; }
+.setup-help ol { padding-left: 18px; line-height: 1.6; margin: 8px 0 0; }
+.setup-help li { margin-bottom: 8px; }
+.setup-help a { color: var(--accent); }
+.gdrive-code-box {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  padding: 16px; margin-bottom: 4px; border: 1px solid var(--accent); border-radius: var(--radius-md); background: var(--accent-soft);
+  font-size: 0.82rem;
+}
+.gdrive-code-box.hidden { display: none; }
+.gdrive-code-box a { color: var(--accent); font-weight: 700; }
+.gdrive-code-box strong { font-size: 1.6rem; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
+.gdrive-code-box small { color: var(--muted); }
+.gdrive-account { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.gdrive-account strong { font-size: 0.9rem; overflow-wrap: anywhere; }
+#gdrive-list { margin-top: 10px; }
+#gdrive-section .error { margin: 8px 0 0; }

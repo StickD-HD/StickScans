@@ -94,13 +94,16 @@ Réglages plus rares : `FETCH_MIN_GAP_SECONDS` / `FETCH_MAX_GAP_SECONDS` (45 / 9
 
 Chaque nuit à 3 h et à chaque démarrage, dans `data/backups/` de l'instance (7 copies par défaut). Tout se gère dans
 **Réglages › Sauvegarde et restauration** : copie manuelle, téléchargement, restauration, export et import.
-Ces copies sont sur le même disque que la base : garde aussi un export ailleurs de temps en temps.
+Ces copies sont sur le même disque que la base : pour en garder une ailleurs, connecte **Google Drive** sur la même page
+(identifiant Google à créer une fois, la marche à suivre est affichée). Une copie part alors chaque nuit dans un dossier
+« StickScans » de ton Drive (7 gardées par défaut), sans jeton AniList ni accès Google dedans ; l'appli ne voit que les
+fichiers qu'elle a créés.
 
 ## Développement
 
 - `app/` (Python) : `main.py` (routes), `database.py`, `scraper.py` (vérifications), `schedule.py` (rythme des séries),
   `fetcher.py` + `site_guard.py` (requêtes et limites), `parse_series.py` (lecture des fiches), `anilist.py`, `auth.py`,
-  `backup.py`, `storage.py`, `scrape_cache.py`.
+  `backup.py`, `gdrive.py`, `storage.py`, `scrape_cache.py`.
 - `static/` : `index.html`, `style.css` et `js/`, un fichier par écran chargé dans l'ordre par `index.html`
   (`core.js` d'abord, `main.js` en dernier). Pas d'étape de compilation.
 - `tests/` : `python -m pytest -q`, lancés aussi par GitHub à chaque envoi (`.github/workflows/tests.yml`, mail en cas

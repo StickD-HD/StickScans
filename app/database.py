@@ -117,7 +117,8 @@ NEW_SERIES_COLUMNS = {
     "anilist_end_date": "TEXT",
     "anilist_cover_url": "TEXT",
     "anilist_notes": "TEXT",
-    "platform": "TEXT",        # plateforme officielle qui publie la série (ex. Webtoons)
+    "platform": "TEXT",
+    "main_team": "TEXT",       # team qui a publié le dernier chapitre (la team principale)        # plateforme officielle qui publie la série (ex. Webtoons)
     "missing_since": "TEXT",   # fiche introuvable sur le site depuis cette date (UTC) ; vide = page trouvée
     "next_check_at": "TEXT",   # prochaine vérification automatique (UTC) ; vide = dès que possible
     "check_reason": "TEXT",    # raison de cet intervalle (voir schedule.REASONS)
@@ -361,6 +362,12 @@ def add_series_to_category(series_id: int, category_id: int):
         )
 
 
+def get_category_series_ids(category_id: int) -> set[int]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT series_id FROM series_categories WHERE category_id = ?", (category_id,)).fetchall()
+        return {r["series_id"] for r in rows}
+
+
 def remove_series_from_category(series_id: int, category_id: int):
     with get_conn() as conn:
         conn.execute(
@@ -390,6 +397,12 @@ def get_all_series(sort: str = "last_checked_at", hide_fully_read: bool = False,
         "popularity": "s.popularity DESC",
         "year": "s.year DESC",
         "added_at": "s.added_at DESC",
+        # Séries suivies sur AniList d'abord, regroupées par statut AniList (en cours, à relire, à lire, en pause,
+        # terminées, abandonnées), puis les séries non liées ; par titre à l'intérieur de chaque groupe.
+        "anilist": """CASE WHEN s.anilist_id IS NULL THEN 9 ELSE CASE s.anilist_status
+                           WHEN 'CURRENT' THEN 0 WHEN 'REPEATING' THEN 1 WHEN 'PLANNING' THEN 2 WHEN 'PAUSED' THEN 3
+                           WHEN 'COMPLETED' THEN 4 WHEN 'DROPPED' THEN 5 ELSE 6 END END,
+                      s.title COLLATE NOCASE ASC""",
     }
     order_clause = order_map.get(sort, "s.last_checked_at DESC")
 
@@ -463,15 +476,16 @@ def insert_series(url: str, parsed: dict) -> int:
         cur = conn.execute(
             """
             INSERT INTO series (url, title, alt_names, cover_url, status, last_chapter_number, last_chapter_url,
-                                 synopsis, author, year, editor, team, platform, popularity, category, last_checked_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                                 synopsis, author, year, editor, team, platform, main_team, popularity, category,
+                                 last_checked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             """,
             (
                 url, parsed.get("title"), alt_names_str, parsed.get("cover_url"), parsed.get("status"),
                 parsed.get("last_chapter_number"), parsed.get("last_chapter_url"),
                 parsed.get("synopsis"), parsed.get("author"), parsed.get("year"),
-                parsed.get("editor"), parsed.get("team"), parsed.get("platform"), parsed.get("popularity"),
-                parsed.get("category"),
+                parsed.get("editor"), parsed.get("team"), parsed.get("platform"), parsed.get("main_team"),
+                parsed.get("popularity"), parsed.get("category"),
             ),
         )
         series_id = cur.lastrowid
@@ -491,14 +505,15 @@ def update_series_result(series_id: int, parsed: dict) -> list[dict]:
 
         set_clauses = [
             "status = ?", "last_chapter_number = ?", "last_chapter_url = ?", "alt_names = ?",
-            "synopsis = ?", "author = ?", "year = ?", "editor = ?", "team = ?", "platform = ?",
+            "synopsis = ?", "author = ?", "year = ?", "editor = ?", "team = ?", "platform = ?", "main_team = ?",
             "popularity = ?", "category = ?", "last_checked_at = datetime('now')", "last_error = NULL",
             "missing_since = NULL",
         ]
         params = [
             parsed.get("status"), parsed.get("last_chapter_number"), parsed.get("last_chapter_url"), alt_names_str,
             parsed.get("synopsis"), parsed.get("author"), parsed.get("year"), parsed.get("editor"),
-            parsed.get("team"), parsed.get("platform"), parsed.get("popularity"), parsed.get("category"),
+            parsed.get("team"), parsed.get("platform"), parsed.get("main_team"), parsed.get("popularity"),
+            parsed.get("category"),
         ]
         if not cover_locked:
             set_clauses.insert(0, "cover_url = ?")

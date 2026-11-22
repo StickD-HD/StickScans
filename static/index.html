@@ -85,6 +85,7 @@
           </button>
           <div id="home-menu" class="popover hidden" role="menu">
             <button id="add-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter une série</button>
+            <button id="library-select-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-check-square"/></svg>Sélectionner des séries</button>
             <button id="random-series-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-shuffle"/></svg>Ouvrir une série aléatoire</button>
             <button id="refresh-all-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg><span id="refresh-all-label">Actualiser toutes les séries</span></button>
             <button id="manage-categories-btn" type="button" role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>Gérer les catégories</button>
@@ -354,6 +355,66 @@
             <select id="backup-keep"><option value="3">3</option><option value="7">7</option><option value="14">14</option><option value="30">30</option></select>
           </label>
         </section>
+        <section class="settings-section" id="gdrive-section">
+          <h2>Google Drive</h2>
+          <p class="section-label">Chaque nuit, une copie de ta base est aussi envoyée sur ton Google Drive, dans un dossier « StickScans ». L'appli n'a accès qu'aux fichiers qu'elle crée, rien d'autre sur ton Drive. Les copies ne contiennent ni ton jeton AniList ni l'accès Google.</p>
+
+          <!-- 1. Identifiant Google pas encore renseigné -->
+          <div id="gdrive-setup" class="hidden">
+            <details id="gdrive-help" class="setup-help" open>
+              <summary>Créer ton identifiant Google (une seule fois, ~10 min)</summary>
+              <ol>
+                <li>Crée un projet (nom au choix, ex. StickScans) sur <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">console.cloud.google.com</a>.</li>
+                <li>Active l'API Google Drive : <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener">page de l'API Drive</a> › « Activer ».</li>
+                <li>Ouvre <a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">Google Auth Platform</a> › « Commencer » : un nom d'appli, ton e-mail, audience <em>Externe</em>.</li>
+                <li>Dans <a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener">Audience</a>, clique sur « Publier l'application » (sinon Google coupe l'accès au bout de 7 jours). Aucune validation n'est demandée pour l'accès limité utilisé ici.</li>
+                <li>Dans <a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noopener">Clients</a> › « Créer un client », type <em>TV et appareils à entrée limitée</em>, puis recopie l'ID client et le code secret ci-dessous.</li>
+              </ol>
+            </details>
+            <label>ID client
+              <input id="gdrive-client-id" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="….apps.googleusercontent.com">
+            </label>
+            <label>Code secret du client
+              <input id="gdrive-client-secret" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="GOCSPX-…">
+            </label>
+            <div class="settings-actions">
+              <button id="gdrive-client-save" type="button" class="primary-btn">Enregistrer</button>
+              <button id="gdrive-client-cancel" type="button" class="hidden">Annuler</button>
+            </div>
+          </div>
+
+          <!-- 2. Identifiant renseigné : connexion au compte -->
+          <div id="gdrive-connect" class="hidden">
+            <div id="gdrive-code-box" class="gdrive-code-box hidden">
+              <span>Sur <a id="gdrive-verify-link" target="_blank" rel="noopener">google.com/device</a>, saisis ce code :</span>
+              <strong id="gdrive-user-code"></strong>
+              <button id="gdrive-copy-code" type="button" class="mini-btn">Copier le code</button>
+              <small id="gdrive-wait">En attente de ta validation…</small>
+            </div>
+            <div class="settings-actions">
+              <button id="gdrive-connect-btn" type="button" class="primary-btn">Connecter Google Drive</button>
+              <button id="gdrive-edit-client" type="button">Changer l'identifiant</button>
+            </div>
+          </div>
+
+          <!-- 3. Connecté -->
+          <div id="gdrive-connected" class="hidden">
+            <div class="gdrive-account">
+              <strong id="gdrive-email">Google Drive connecté</strong>
+              <span id="gdrive-last" class="section-label"></span>
+            </div>
+            <label class="switch-row"><span><strong>Copies gardées sur le Drive</strong><small>Les plus anciennes sont supprimées</small></span>
+              <select id="gdrive-keep"><option value="3">3</option><option value="7">7</option><option value="14">14</option><option value="30">30</option></select>
+            </label>
+            <button id="gdrive-upload-btn" type="button" class="primary-btn">Envoyer une copie maintenant</button>
+            <ul id="gdrive-list" class="backup-list"></ul>
+            <div class="settings-actions">
+              <button id="gdrive-disconnect-btn" type="button" class="danger-btn">Déconnecter Google Drive</button>
+            </div>
+          </div>
+          <p id="gdrive-error" class="error hidden"></p>
+          <p id="gdrive-msg" class="section-label"></p>
+        </section>
         <section class="settings-section">
           <h2>Mes sauvegardes</h2>
           <button id="backup-now-btn" type="button" class="primary-btn">Sauvegarder maintenant</button>
@@ -409,6 +470,7 @@
           <option value="popularity">Popularité</option>
           <option value="year">Année</option>
           <option value="added_at">Date d'ajout</option>
+          <option value="anilist">Suivi par AniList</option>
         </select>
       </label>
       <label>Genre
@@ -422,6 +484,58 @@
         Masquer les séries entièrement lues
       </label>
       <button id="filter-modal-close">Fermer</button>
+    </div>
+  </div>
+
+  <!-- Sélection de séries dans la bibliothèque : barre fixée en bas, et feuilles d'actions -->
+  <div id="library-toolbar" class="select-toolbar hidden" role="toolbar" aria-label="Séries sélectionnées">
+    <span id="library-selection-count" class="selection-count" aria-live="polite">0 sélectionnée</span>
+    <div class="toolbar-actions">
+      <button id="library-select-all-btn" type="button">Tout</button>
+      <button id="library-actions-btn" type="button" class="primary">Actions</button>
+      <button id="library-select-cancel-btn" type="button" class="toolbar-close" aria-label="Quitter la sélection"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+  </div>
+
+  <div id="bulk-modal" class="sheet-modal hidden">
+    <div class="sheet-modal-content">
+      <h2 id="bulk-modal-title">Séries sélectionnées</h2>
+      <div class="bulk-actions">
+        <button type="button" data-bulk="categories"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>Modifier les catégories</button>
+        <button type="button" data-bulk="mark_read"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Marquer tout comme lu</button>
+        <button type="button" data-bulk="mark_unread"><svg class="ico" aria-hidden="true"><use href="#i-rotate-ccw"/></svg>Marquer tout comme non lu</button>
+        <button type="button" data-bulk="anilist"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg>Lier à AniList</button>
+        <button type="button" data-bulk="delete" class="danger-item"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg>Retirer de la bibliothèque</button>
+      </div>
+      <button id="bulk-modal-close" type="button">Fermer</button>
+    </div>
+  </div>
+
+  <div id="bulk-category-modal" class="sheet-modal hidden">
+    <div class="sheet-modal-content">
+      <h2>Catégories</h2>
+      <p class="section-label">Cocher ajoute toutes les séries sélectionnées à la catégorie, décocher les en retire.</p>
+      <div id="bulk-category-list" class="bulk-category-list"></div>
+      <button id="bulk-category-close" type="button">Fermer</button>
+    </div>
+  </div>
+
+  <div id="bulk-anilist-modal" class="sheet-modal hidden">
+    <div class="sheet-modal-content">
+      <h2>Lier à AniList <span id="bulk-anilist-step" class="muted-inline"></span></h2>
+      <div class="bulk-anilist-series">
+        <img id="bulk-anilist-cover" alt="">
+        <strong id="bulk-anilist-title"></strong>
+      </div>
+      <div class="anilist-search-row">
+        <input id="bulk-anilist-input" type="text" placeholder="Rechercher sur AniList">
+        <button id="bulk-anilist-search" type="button">Rechercher</button>
+      </div>
+      <ul id="bulk-anilist-results" class="anilist-results"></ul>
+      <div class="bulk-anilist-nav">
+        <button id="bulk-anilist-skip" type="button">Passer</button>
+        <button id="bulk-anilist-close" type="button">Terminer</button>
+      </div>
     </div>
   </div>
 
@@ -596,6 +710,7 @@
   <script src="/static/js/core.js"></script>
   <script src="/static/js/library.js"></script>
   <script src="/static/js/series.js"></script>
+  <script src="/static/js/library-select.js"></script>
   <script src="/static/js/add.js"></script>
   <script src="/static/js/updates-history.js"></script>
   <script src="/static/js/checks.js"></script>
