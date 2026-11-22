@@ -905,3 +905,9 @@ html { touch-action: manipulation; }
 /* Fiche : le bloc prend toute la hauteur de la couverture, lignes réparties du haut au bas */
 #detail-info { height: calc(var(--cover-w) * 1.5); justify-content: space-between; gap: 4px; }
 .info-line.fit-hidden { display: none; }
+
+/* Fiche : l'état devient une ligne comme les autres (texte coloré avec pastille), et un peu d'air avant les boutons */
+#detail-meta { font-size: 0.78rem; }
+.status-text { background: none; font-weight: 600; }
+.status-text::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 5px; vertical-align: 1px; }
+#detail-actions { margin-top: 22px; }

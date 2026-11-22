@@ -91,7 +91,9 @@ async function loadSeriesDetail() {
   detailCover.src = s.cover_url || "";
   detailTitle.textContent = s.title || "Sans titre";
 
-  detailMeta.innerHTML = s.status ? `<span class="status-pill ${statusClass(s.status)}">${escapeHtml(s.status)}</span>` : "";
+  detailMeta.innerHTML = s.status
+    ? `<span class="info-label">État</span><span class="status-text ${statusClass(s.status)}">${escapeHtml(s.status)}</span>` : "";
+  detailMeta.classList.toggle("hidden", !s.status);
 
   detailGenres.innerHTML = "";
   for (const g of s.genres || []) {
