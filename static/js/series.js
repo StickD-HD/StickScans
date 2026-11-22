@@ -73,6 +73,7 @@ async function openChaptersView(seriesId) {
   currentAnilistProgress = null;
   anilistAlignBanner.classList.add("hidden");
   setSelectionMode(false);
+  clearDetailUI(); // jamais l'ancienne fiche le temps que la nouvelle arrive
   if (chaptersView.classList.contains("hidden")) {
     viewBeforeDetail = lastTopView;
     scrollBeforeDetail = window.scrollY;
@@ -87,9 +88,37 @@ async function openChaptersView(seriesId) {
   syncAnilist(); // en arrière-plan : récupère ce qui a changé sur AniList depuis la dernière fois
 }
 
+const BLANK_IMG = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
+// Vide la fiche et affiche des blocs qui pulsent jusqu'à l'arrivée des données de la série ouverte.
+function clearDetailUI() {
+  chaptersView.classList.add("detail-loading");
+  detailCover.classList.remove("loaded");
+  detailCover.src = BLANK_IMG;
+  document.getElementById("detail-backdrop").style.backgroundImage = "";
+  detailTitle.textContent = "";
+  detailMeta.classList.add("hidden");
+  [detailType, detailTeam, detailProgress, detailRemaining, detailReading, detailNextCheck].forEach((el) => el.classList.add("hidden"));
+  detailGenres.innerHTML = "";
+  detailSynopsis.textContent = "";
+  synopsisToggle.classList.add("hidden");
+  chaptersList.innerHTML = "";
+  document.getElementById("chapters-count").innerHTML = "";
+  document.getElementById("chapter-hint").classList.add("hidden");
+  continueReadingBtn.classList.add("hidden");
+  document.getElementById("skipped-banner").classList.add("hidden");
+  anilistActionBtn.innerHTML = `${icon("link")}<span>AniList</span>`;
+  anilistActionBtn.classList.remove("linked");
+  anilistLinked.classList.add("hidden");
+}
+
 async function loadSeriesDetail() {
-  const res = await fetch(`/api/series/${currentSeriesId}`);
+  const seriesId = currentSeriesId;
+  const res = await fetch(`/api/series/${seriesId}`);
   const s = await res.json();
+  if (seriesId !== currentSeriesId) return; // une autre fiche a été ouverte entre-temps
+  chaptersView.classList.remove("detail-loading");
+  if (detailCover.getAttribute("src") !== (s.cover_url || "")) detailCover.classList.remove("loaded");
   detailCover.src = s.cover_url || "";
   // Fond de la fiche : la couverture, très floutée, qui se fond dans le fond de l'appli.
   document.getElementById("detail-backdrop").style.backgroundImage = s.cover_url ? `url(${JSON.stringify(s.cover_url)})` : "";
@@ -182,8 +211,11 @@ function updateContinueReadingButton() {
 }
 
 async function loadChapters() {
-  const res = await fetch(`/api/series/${currentSeriesId}/chapters`);
-  currentChapters = await res.json();
+  const seriesId = currentSeriesId;
+  const res = await fetch(`/api/series/${seriesId}/chapters`);
+  const chapters = await res.json();
+  if (seriesId !== currentSeriesId) return; // réponse d'une fiche qu'on a quittée
+  currentChapters = chapters;
   updateContinueReadingButton();
   updateAlignBanner();
   const total = currentChapters.length;

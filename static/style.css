@@ -1161,8 +1161,6 @@ button:active:not(:disabled) { opacity: 1; transform: scale(0.97); }
   transition: background-image 0.3s ease;
 }
 #chapters-view { overflow-x: clip; }
-#chapters-view header { background: transparent; }
-body.scrolled #chapters-view header { background: var(--bg); }
 #detail-cover { box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); }
 
 /* --- Barres de sélection et messages : verre dépoli --- */
@@ -1180,3 +1178,25 @@ body.scrolled #chapters-view header { background: var(--bg); }
   *, *::before, *::after { animation: none !important; }
   .cover-wrap img, .update-row img { opacity: 1; }
 }
+
+/* --- En-têtes en verre dépoli : le contenu (et le fond flouté de la fiche) passe dessous en transparence --- */
+header {
+  background: rgba(8, 13, 24, 0.7);
+  backdrop-filter: blur(18px) saturate(1.5); -webkit-backdrop-filter: blur(18px) saturate(1.5);
+}
+body.scrolled header { box-shadow: 0 1px 0 rgba(32, 43, 72, 0.7); }
+
+/* --- Fiche en cours de chargement : blocs qui pulsent à la place de l'ancienne fiche --- */
+#detail-cover { opacity: 0; transition: opacity 0.25s ease; }
+#detail-cover.loaded { opacity: 1; }
+.detail-loading #detail-cover, .detail-loading #detail-title, .detail-loading #detail-info::before, .detail-loading #detail-info::after {
+  background: linear-gradient(90deg, #131C30 0%, #1E2A47 50%, #131C30 100%);
+  background-size: 320px 100%; animation: shimmer 1.3s linear infinite; border-radius: var(--radius-sm);
+}
+.detail-loading #detail-cover { opacity: 1; box-shadow: none; }
+.detail-loading #detail-title { display: block; height: 22px; width: 85%; }
+.detail-loading #detail-info { flex: 1; justify-content: flex-start; gap: 12px; }
+.detail-loading #detail-info::before { content: ""; order: 2; display: block; height: 12px; width: 45%; }
+.detail-loading #detail-info::after { content: ""; order: 3; display: block; height: 70px; width: 70%; }
+.detail-loading #detail-actions, .detail-loading #detail-synopsis-wrap { opacity: 0.35; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { #detail-cover { opacity: 1; } }
