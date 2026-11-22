@@ -10,9 +10,10 @@
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <meta name="theme-color" content="#080D18">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- Barre d'état opaque : la page ne passe plus derrière elle. Avec « black-translucent », iOS 26 dessine un effet de bord flou
-     (halos au-dessus du logo et des boutons) ; ce réglage n'est lu qu'à l'installation de l'appli sur l'écran d'accueil. -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<!-- Barre d'état transparente : l'appli remplit la zone de l'encoche (les en-têtes y ajoutent leur marge). Avec « black »,
+     iOS dessine une bande noire séparée. Si l'effet de bord flou d'iOS 26 (halos au-dessus des boutons) revenait, remettre
+     « black ». Ce réglage n'est lu qu'à l'installation de l'appli sur l'écran d'accueil (supprimer puis rajouter l'appli). -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preload" href="/static/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css">
 </head>
