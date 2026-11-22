@@ -447,14 +447,17 @@
     <div id="detail-panel">
       <div id="detail-top">
         <img id="detail-cover" alt="">
+        <!-- À côté de la couverture, sans jamais dépasser sa hauteur : titre, état, team principale, temps de lecture,
+             prochaine vérification (une ligne chacun) -->
         <div id="detail-info">
           <h1 id="detail-title"></h1>
           <div id="detail-meta"></div>
-          <div id="detail-author"></div>
-          <div id="detail-editor"></div>
-          <div id="detail-team"></div>
-          <div id="detail-platform"></div>
-          <div id="detail-next-check"></div>
+          <div id="detail-type" class="info-line"></div>
+          <div id="detail-team" class="info-line"></div>
+          <div id="detail-progress" class="info-line"></div>
+          <div id="detail-remaining" class="info-line"></div>
+          <div id="detail-reading" class="info-line"></div>
+          <div id="detail-next-check" class="info-line"></div>
         </div>
       </div>
 

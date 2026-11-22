@@ -15,10 +15,12 @@ const detailTitle = document.getElementById("detail-title");
 const detailSourceBtn = document.getElementById("detail-source-btn");
 const detailMeta = document.getElementById("detail-meta");
 const detailGenres = document.getElementById("detail-genres");
-const detailAuthor = document.getElementById("detail-author");
-const detailEditor = document.getElementById("detail-editor");
 const detailTeam = document.getElementById("detail-team");
 const detailNextCheck = document.getElementById("detail-next-check");
+const detailReading = document.getElementById("detail-reading");
+const detailType = document.getElementById("detail-type");
+const detailProgress = document.getElementById("detail-progress");
+const detailRemaining = document.getElementById("detail-remaining");
 const CHECK_REASON_LABELS = {
   between: "entre deux sorties",
   window: "sortie attendue",
@@ -89,8 +91,7 @@ async function loadSeriesDetail() {
   detailCover.src = s.cover_url || "";
   detailTitle.textContent = s.title || "Sans titre";
 
-  const statusPill = s.status ? `<span class="status-pill ${statusClass(s.status)}">${escapeHtml(s.status)}</span>` : "";
-  detailMeta.innerHTML = statusPill + escapeHtml([s.category, s.year].filter(Boolean).join(" · "));
+  detailMeta.innerHTML = s.status ? `<span class="status-pill ${statusClass(s.status)}">${escapeHtml(s.status)}</span>` : "";
 
   detailGenres.innerHTML = "";
   for (const g of s.genres || []) {
@@ -100,14 +101,24 @@ async function loadSeriesDetail() {
     detailGenres.appendChild(chip);
   }
 
-  detailAuthor.textContent = s.author ? "Auteur : " + s.author : "";
-  detailEditor.textContent = s.editor ? "Éditeur : " + s.editor : "";
   renderUrlChange(s);
-  detailTeam.textContent = s.team ? "Team trad : " + s.team : "";
-  document.getElementById("detail-platform").textContent = s.platform ? "Plateforme officielle : " + s.platform : "";
-  detailNextCheck.textContent = s.next_check_at
-    ? `Prochaine vérification : ${formatFuture(s.next_check_at)}${CHECK_REASON_LABELS[s.check_reason] ? " (" + CHECK_REASON_LABELS[s.check_reason] + ")" : ""}`
-    : "Prochaine vérification : dès que possible";
+  // Team principale (celle du dernier chapitre) ; à défaut, toutes les teams, coupées si trop longues.
+  const team = s.main_team || s.team;
+  setInfoLine(detailTeam, "Trad.", team, s.main_team ? `Team principale (dernier chapitre) · toutes : ${s.team || s.main_team}` : s.team);
+  setInfoLine(detailType, "Type", [s.category, s.year].filter(Boolean).join(" · "));
+  // Progression et temps de lecture estimés, à raison de minutes_per_chapter minutes par chapitre.
+  const mpc = s.minutes_per_chapter || 5;
+  const total = s.total_chapters || 0;
+  const unread = s.unread_count || 0;
+  const readCount = Math.max(0, total - unread);
+  setInfoLine(detailProgress, "Progression", total ? `${readCount} / ${total} chapitres` : "");
+  setInfoLine(detailRemaining, "Reste à lire", total ? (unread ? `${unread} chap. · ${formatMinutes(unread * mpc)}` : "rien, tu es à jour ✓") : "",
+    `Estimation : ${mpc} min par chapitre`);
+  setInfoLine(detailReading, "Temps lu", readCount ? formatMinutes(readCount * mpc) : "", `Estimation : ${mpc} min par chapitre`);
+  const reason = CHECK_REASON_LABELS[s.check_reason] || "";
+  setInfoLine(detailNextCheck, "Prochaine vérif.", s.next_check_at ? formatFuture(s.next_check_at) : "dès que possible",
+    `Prochaine vérification${reason ? " (" + reason + ")" : ""}`);
+  fitDetailInfo();
   detailSourceLink.href = s.url;
   detailSourceBtn.href = s.url;
   renderAnilistSection(s);
@@ -687,4 +698,36 @@ skippedReadBtn.addEventListener("click", async () => {
   toast(`${n} chapitre${n > 1 ? "s" : ""} marqué${n > 1 ? "s" : ""} comme lu${n > 1 ? "s" : ""}.`, "ok");
   loadChapters();
   scheduleAnilistRefresh();
+});
+
+
+// Une ligne d'information de la fiche : « Libellé  valeur », coupée par « … » si trop longue (texte complet au
+// toucher prolongé / survol). Ligne masquée s'il n'y a pas de valeur.
+function setInfoLine(el, label, value, fullText) {
+  el.classList.toggle("hidden", !value);
+  el.innerHTML = value ? `<span class="info-label">${escapeHtml(label)}</span> ${escapeHtml(value)}` : "";
+  el.title = fullText || value || "";
+}
+
+// 75 -> « 1 h 15 », 40 -> « 40 min », 1260 -> « 21 h »
+function formatMinutes(total) {
+  if (total < 60) return `${total} min`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
+}
+
+// Le bloc d'informations occupe exactement la hauteur de la couverture (lignes réparties du haut au bas). S'il
+// déborde (titre sur deux lignes, petit écran), les lignes les moins utiles sont masquées, dans cet ordre.
+const INFO_HIDE_ORDER = ["detail-reading", "detail-progress", "detail-type", "detail-next-check"];
+function fitDetailInfo() {
+  const box = document.getElementById("detail-info");
+  box.querySelectorAll(".info-line.fit-hidden").forEach((el) => el.classList.remove("fit-hidden"));
+  for (const id of INFO_HIDE_ORDER) {
+    if (box.scrollHeight <= box.clientHeight + 1) break;
+    document.getElementById(id).classList.add("fit-hidden");
+  }
+}
+window.addEventListener("resize", () => {
+  if (!chaptersView.classList.contains("hidden")) fitDetailInfo();
 });

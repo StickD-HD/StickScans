@@ -318,7 +318,7 @@ main#library { padding: 0 18px; }
 #detail-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 #detail-info h1 { font-size: 1.15rem; margin: 0 0 2px; }
 
-#detail-meta, #detail-author, #detail-editor, #detail-team, #detail-platform { font-size: 0.78rem; color: var(--muted); }
+#detail-meta { font-size: 0.78rem; color: var(--muted); }
 
 /* --- Rangée d'actions : AniList / Catégorie / Source --- */
 #detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
@@ -713,8 +713,6 @@ a.mini-btn {
 .site-status p { margin: 0 0 6px; }
 .site-status strong { color: var(--text); }
 .site-status strong.warn-text { color: var(--error); }
-#detail-next-check { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
-#detail-next-check:empty { display: none; }
 
 /* Réglages › Vérifications */
 #checks-overview { padding: 0 18px; display: flex; flex-direction: column; gap: 12px; }
@@ -886,3 +884,24 @@ img.brand-mark { display: block; width: 32px; height: 32px; padding: 0; backgrou
 /* Pas de zoom au double tap (le pincement et le zoom à l'entrée dans un champ sont bloqués par la balise viewport
    et par core.js) */
 html { touch-action: manipulation; }
+
+/* Fiche : bloc d'informations à la hauteur exacte de la couverture (2:3), jamais plus haut */
+#detail-top { --cover-w: 126px; align-items: flex-start; }
+#detail-cover { width: var(--cover-w); }
+#detail-info {
+  min-width: 0; max-height: calc(var(--cover-w) * 1.5); overflow: hidden;
+  display: flex; flex-direction: column; gap: 7px;
+}
+#detail-info h1 {
+  margin: 0; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+#detail-meta { margin: 0; }
+#detail-meta:empty { display: none; }
+.info-line { font-size: 0.78rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info-label { color: var(--muted); margin-right: 4px; }
+@media (min-width: 860px) { #detail-top { --cover-w: 170px; } }
+
+/* Fiche : le bloc prend toute la hauteur de la couverture, lignes réparties du haut au bas */
+#detail-info { height: calc(var(--cover-w) * 1.5); justify-content: space-between; gap: 4px; }
+.info-line.fit-hidden { display: none; }
