@@ -30,6 +30,7 @@ function showSettingsPage(name) {
   settingsBackBtn.classList.toggle("hidden", !name);
   settingsTitle.textContent = title;
   window.scrollTo(0, 0);
+  playEnter(name ? [...settingsPageEls].find((p) => p.dataset.page === name) : settingsHome, name ? "view-push" : "view-enter");
   if (name && SETTINGS_PAGE_LOADERS[name]) SETTINGS_PAGE_LOADERS[name]();
 }
 

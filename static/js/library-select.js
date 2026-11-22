@@ -289,11 +289,12 @@ watchModalClosed(bulkAnilistModal, () => {
 function swapModal(from, to) {
   const top = layers[layers.length - 1];
   from.classList.add("hidden");
+  prepareSheet(to);
   to.classList.remove("hidden");
   if (top && top.el === from) {
-    Object.assign(top, { el: to, view: to.firstElementChild, close: () => to.classList.add("hidden") });
+    Object.assign(top, { el: to, view: to.firstElementChild, close: () => hideSheet(to) });
   } else {
-    pushLayer({ el: to, view: to.firstElementChild, close: () => to.classList.add("hidden") });
+    pushLayer({ el: to, view: to.firstElementChild, close: () => hideSheet(to) });
   }
 }
 

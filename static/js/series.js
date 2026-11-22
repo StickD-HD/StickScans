@@ -78,6 +78,7 @@ async function openChaptersView(seriesId) {
     scrollBeforeDetail = window.scrollY;
     Object.values(topViews).forEach((v) => v.classList.add("hidden"));
     chaptersView.classList.remove("hidden");
+    playEnter(chaptersView, "view-push");
     window.scrollTo(0, 0);
     pushLayer({ detail: true, view: chaptersView, close: closeDetailUI });
   }
@@ -90,6 +91,8 @@ async function loadSeriesDetail() {
   const res = await fetch(`/api/series/${currentSeriesId}`);
   const s = await res.json();
   detailCover.src = s.cover_url || "";
+  // Fond de la fiche : la couverture, très floutée, qui se fond dans le fond de l'appli.
+  document.getElementById("detail-backdrop").style.backgroundImage = s.cover_url ? `url(${JSON.stringify(s.cover_url)})` : "";
   detailTitle.textContent = s.title || "Sans titre";
 
   detailMeta.innerHTML = s.status

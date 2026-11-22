@@ -150,6 +150,10 @@ async function loadLibrary() {
   if (anilistFilterSelect.value) params.set("anilist", anilistFilterSelect.value);
   if (searchInput.value.trim()) params.set("search", searchInput.value.trim());
 
+  // Premier affichage : des cartes vides qui pulsent pendant le chargement, plutôt qu'un écran noir.
+  if (!grid.querySelector(".card")) {
+    grid.innerHTML = '<div class="card skeleton"><div class="cover-wrap"></div><div class="info"><span></span><span></span></div></div>'.repeat(9);
+  }
   const res = await fetch(`/api/series?${params}`);
   const series = await res.json();
   libraryShown = series;
@@ -188,6 +192,7 @@ async function loadLibrary() {
         <div class="chapter">${s.last_chapter_number ? "Ch. " + escapeHtml(s.last_chapter_number) : "?"}</div>
       </div>
     `;
+    markCached(card);
     card.addEventListener("click", () => {
       if (librarySelecting) toggleLibrarySelection(s.id, card);
       else openChaptersView(s.id);

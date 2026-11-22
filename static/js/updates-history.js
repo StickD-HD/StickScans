@@ -81,6 +81,7 @@ function renderGroupedList(container, items, dateField, titleFn, detailFn) {
       <img src="${escapeHtml(item.series_cover)}" alt="" loading="lazy">
       <span><strong class="row-title">${titleFn(item)}</strong><small class="update-time">${detailFn(item)}</small></span>
     `;
+    markCached(row);
     row.addEventListener("click", () => openChaptersView(item.series_id));
     container.appendChild(row);
   }
@@ -159,6 +160,7 @@ function renderHistoryList(container, items) {
       <span><strong class="row-title">${escapeHtml(group.series_title)}</strong><small class="update-time">${detail} · ${formatTimeLabel(group.read_at)}</small></span>
       <button class="history-remove-btn" type="button" title="Retirer de l'historique" aria-label="Retirer de l'historique">${icon("x")}</button>
     `;
+    markCached(row);
     row.addEventListener("click", () => openChaptersView(group.series_id));
     row.querySelector(".history-remove-btn").addEventListener("click", async (e) => {
       e.stopPropagation();

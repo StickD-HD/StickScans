@@ -95,17 +95,138 @@ function dropAllLayers() {
   history.go(-n);
 }
 
+// --- Mouvement : feuilles du bas qui montent et redescendent, écrans qui apparaissent en fondu ---
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const SHEET_CLOSE_MS = 200;
+
+// Ferme une feuille en la faisant redescendre (« hidden » n'est posé qu'à la fin). Si elle a déjà été poussée hors
+// de l'écran par un geste (transformation en cours), elle disparaît tout de suite.
+function hideSheet(el) {
+  if (el.classList.contains("hidden") || el.classList.contains("closing")) return;
+  const content = el.firstElementChild;
+  if (reduceMotion.matches || (content && content.style.transform)) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.classList.add("closing");
+  el._closeTimer = setTimeout(() => {
+    el.classList.remove("closing");
+    el.classList.add("hidden");
+  }, SHEET_CLOSE_MS);
+}
+
 function openModal(el) {
+  if (el.classList.contains("closing")) {
+    // Rouverte pendant qu'elle se refermait : on repart d'une feuille fermée.
+    clearTimeout(el._closeTimer);
+    el.classList.remove("closing");
+    el.classList.add("hidden");
+  }
   if (!el.classList.contains("hidden")) return;
+  prepareSheet(el);
   el.classList.remove("hidden");
-  pushLayer({ el, view: el.firstElementChild, close: () => el.classList.add("hidden") });
+  pushLayer({ el, view: el.firstElementChild, close: () => hideSheet(el) });
 }
 
 function closeModal(el) {
   const top = layers[layers.length - 1];
   if (top && top.el === el) closeTopLayer();
-  else el.classList.add("hidden");
+  else hideSheet(el);
 }
+
+// Rejoue l'animation d'entrée d'un écran (onglet, fiche, page de Réglages).
+function playEnter(el, cls = "view-enter") {
+  if (!el || reduceMotion.matches) return;
+  el.classList.remove("view-enter", "view-push");
+  void el.offsetWidth; // redémarre l'animation
+  el.classList.add(cls);
+}
+document.addEventListener("animationend", (e) => {
+  if (e.target.classList && (e.animationName === "view-enter" || e.animationName === "view-push")) {
+    e.target.classList.remove("view-enter", "view-push");
+  }
+});
+
+// Poignée en haut de chaque feuille, et feuille qu'on tire vers le bas pour la fermer (depuis la poignée ou le
+// titre, ou n'importe où quand son contenu est en haut de son défilement).
+function prepareSheet(el) {
+  const content = el.firstElementChild;
+  if (!content || el._sheetReady) return;
+  el._sheetReady = true;
+  if (!content.querySelector(".sheet-handle")) {
+    const handle = document.createElement("div");
+    handle.className = "sheet-handle";
+    content.prepend(handle);
+  }
+  let drag = null;
+  content.addEventListener("touchstart", (e) => {
+    drag = null;
+    if (e.touches.length !== 1 || e.target.closest("input, textarea, select")) return;
+    const top = content.getBoundingClientRect().top;
+    const t = e.touches[0];
+    const nearTop = t.clientY - top < 64;
+    if (!nearTop && content.scrollTop > 0) return;
+    drag = { y: t.clientY, x: t.clientX, t: Date.now(), dy: 0, active: false };
+  }, { passive: true });
+  content.addEventListener("touchmove", (e) => {
+    if (!drag) return;
+    const t = e.touches[0];
+    const dy = t.clientY - drag.y;
+    if (!drag.active) {
+      if (Math.abs(dy) < 8) return;
+      if (dy < 0 || Math.abs(t.clientX - drag.x) > Math.abs(dy)) { drag = null; return; }
+      if (content.scrollTop > 0) { drag = null; return; }
+      drag.active = true;
+      content.classList.add("dragging");
+    }
+    e.preventDefault();
+    drag.dy = Math.max(0, dy);
+    content.style.transform = `translateY(${drag.dy}px)`;
+  }, { passive: false });
+  const end = () => {
+    const d = drag;
+    drag = null;
+    if (!d || !d.active) return;
+    content.classList.remove("dragging");
+    const speed = d.dy / Math.max(1, Date.now() - d.t);
+    if (d.dy > 110 || (d.dy > 40 && speed > 0.5)) {
+      content.style.transition = "transform 0.18s ease-in";
+      content.style.transform = "translateY(100%)";
+      setTimeout(() => {
+        closeModal(el);
+        content.style.transition = "";
+        content.style.transform = "";
+      }, 180);
+    } else {
+      content.style.transition = "transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1)";
+      content.style.transform = "";
+      setTimeout(() => { content.style.transition = ""; }, 230);
+    }
+  };
+  content.addEventListener("touchend", end, { passive: true });
+  content.addEventListener("touchcancel", end, { passive: true });
+}
+
+// Images (couvertures) : apparaissent en fondu une fois chargées, sur un fond qui pulse en attendant.
+document.addEventListener("load", (e) => { if (e.target.tagName === "IMG") e.target.classList.add("loaded"); }, true);
+document.addEventListener("error", (e) => { if (e.target.tagName === "IMG") e.target.classList.add("loaded"); }, true);
+
+// Image déjà en cache : affichée tout de suite, sans fondu (retour à la bibliothèque, changement de filtre).
+function markCached(root) {
+  root.querySelectorAll("img:not(.loaded)").forEach((img) => {
+    if (img.complete && img.naturalWidth) img.classList.add("loaded");
+  });
+}
+
+// En-tête : une fine ombre apparaît dès qu'on a fait défiler la page.
+let scrolledFlag = false;
+window.addEventListener("scroll", () => {
+  const s = window.scrollY > 4;
+  if (s !== scrolledFlag) {
+    scrolledFlag = s;
+    document.body.classList.toggle("scrolled", s);
+  }
+}, { passive: true });
 
 // Écran secondaire ouvert depuis Réglages (Vérifications, Aperçu de lecture) : retour vers Réglages.
 function openSettingsSubview(viewId) {
@@ -188,6 +309,7 @@ function goToTopView(viewId) {
   Object.values(topViews).forEach((v) => v.classList.add("hidden"));
   chaptersView.classList.add("hidden");
   topViews[viewId].classList.remove("hidden");
+  playEnter(topViews[viewId]);
 }
 
 navButtons.forEach((btn) => {
@@ -278,8 +400,8 @@ function endSwipe(cancelled) {
   el.style.transform = go ? "translateX(100%)" : "translateX(0)";
   const done = () => {
     el.classList.remove("swipe-settle");
-    el.style.transform = "";
     if (go && layers.length && swipeTarget() === el) closeTopLayer();
+    el.style.transform = "";
   };
   setTimeout(done, go ? 160 : 180);
 }
