@@ -509,6 +509,25 @@
     </div>
   </div>
 
+  <div id="chapter-sheet" class="sheet-modal hidden">
+    <div class="sheet-modal-content">
+      <div>
+        <h2 id="chapter-sheet-title"></h2>
+        <p id="chapter-sheet-sub" class="section-label"></p>
+      </div>
+      <div class="bulk-actions">
+        <button type="button" data-act="open"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Ouvrir le chapitre</button>
+        <button type="button" data-act="open-only"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Ouvrir sans marquer comme lu</button>
+        <button type="button" data-act="read"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Marquer comme lu</button>
+        <button type="button" data-act="read-up-to"><svg class="ico" aria-hidden="true"><use href="#i-check-square"/></svg>Marquer comme lu jusqu'ici</button>
+        <button type="button" data-act="unread"><svg class="ico" aria-hidden="true"><use href="#i-rotate-ccw"/></svg>Marquer comme non lu</button>
+        <button type="button" data-act="unread-from"><svg class="ico" aria-hidden="true"><use href="#i-rotate-ccw"/></svg>Non lu à partir d'ici</button>
+        <button type="button" data-act="select"><svg class="ico" aria-hidden="true"><use href="#i-check-square"/></svg>Sélectionner plusieurs chapitres</button>
+      </div>
+      <button id="chapter-sheet-close" type="button">Fermer</button>
+    </div>
+  </div>
+
   <div id="bulk-modal" class="sheet-modal hidden">
     <div class="sheet-modal-content">
       <h2 id="bulk-modal-title">Séries sélectionnées</h2>
@@ -661,6 +680,7 @@
       </div>
     </div>
     <main>
+      <p id="chapter-hint" class="chapter-hint hidden">Appui long sur un chapitre pour le marquer lu ou non lu, et plus.</p>
       <ul id="chapters-list"></ul>
     </main>
   </div>

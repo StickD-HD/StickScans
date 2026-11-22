@@ -59,6 +59,7 @@ let pressTimer = null;
 let pressStart = null;
 let swallowClick = false;
 grid.addEventListener("pointerdown", (e) => {
+  swallowClick = false; // un relâchement d'appui long qui n'a pas produit de clic ne doit pas manger le suivant
   const card = e.target.closest(".card");
   if (!card || librarySelecting || (e.pointerType === "mouse" && e.button !== 0)) return;
   pressStart = { x: e.clientX, y: e.clientY };

@@ -191,6 +191,7 @@ async function loadChapters() {
   const readNumbers = currentChapters.filter((c) => c.is_read).map((c) => c.number_float);
   const furthestRead = readNumbers.length ? Math.max(...readNumbers) : null;
   const skipped = furthestRead === null ? [] : currentChapters.filter((c) => !c.is_read && c.number_float < furthestRead);
+  document.getElementById("chapter-hint").classList.toggle("hidden", !total || selectionMode || localStorage.getItem("stickscans_chapter_hint") === "1");
   renderSkippedBanner(skipped, currentChapters.find((c) => c.is_read && c.number_float === furthestRead));
 
   chaptersList.innerHTML = "";
@@ -203,55 +204,32 @@ async function loadChapters() {
       (noLink ? '<span class="chapter-tag">pas de lien</span>' : "");
     li.className = "chapter-row" + (c.is_read ? " read" : "") + (isSelected ? " selected" : "") + (noLink ? " no-link" : "") + (isSkipped ? " skipped" : "");
 
-    if (selectionMode) {
-      li.innerHTML = `
-        <input type="checkbox" class="select-checkbox" ${isSelected ? "checked" : ""}>
-        <span class="chapter-number">Chapitre ${escapeHtml(c.number)}</span>
-        ${linkTag}
-      `;
-      const cb = li.querySelector(".select-checkbox");
-      cb.addEventListener("change", (e) => {
-        if (e.target.checked) selectedChapterIds.add(c.id); else selectedChapterIds.delete(c.id);
+    li.dataset.id = c.id;
+    // Plus de case à cocher : le chapitre lu est grisé avec une coche, le non lu a un point. Toucher ouvre le
+    // chapitre ; un appui long (ou clic droit) ouvre ses actions ; en mode sélection, toucher coche / décoche.
+    const state = c.is_read
+      ? `<span class="chapter-state read-mark" title="Lu">${icon("check")}</span>`
+      : '<span class="chapter-state unread-dot" title="Non lu"></span>';
+    li.innerHTML = `
+      ${selectionMode ? `<span class="row-select-mark" aria-hidden="true">${icon("check")}</span>` : ""}
+      <span class="chapter-number">Chapitre ${escapeHtml(c.number)}</span>
+      ${linkTag}
+      ${state}
+    `;
+    li.addEventListener("click", () => {
+      if (selectionMode) {
+        if (selectedChapterIds.has(c.id)) selectedChapterIds.delete(c.id); else selectedChapterIds.add(c.id);
+        li.classList.toggle("selected", selectedChapterIds.has(c.id));
         updateSelectionCount();
-        li.classList.toggle("selected", e.target.checked);
-      });
-      li.addEventListener("click", (e) => {
-        if (e.target === cb) return;
-        cb.checked = !cb.checked;
-        cb.dispatchEvent(new Event("change"));
-      });
-    } else {
-      li.innerHTML = `
-        <input type="checkbox" class="chapter-checkbox" ${c.is_read ? "checked" : ""}>
-        <span class="chapter-number">Chapitre ${escapeHtml(c.number)}</span>
-        ${linkTag}
-      `;
-      li.querySelector(".chapter-checkbox").addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const isRead = e.target.checked;
-        if (isRead) {
-          const earlierUnread = currentChapters.some(
-            (ch) => ch.number_float < c.number_float && !ch.is_read
-          );
-          if (earlierUnread) {
-            const cascade = confirm(
-              "Des chapitres précédents ne sont pas encore marqués comme lus. Les marquer aussi ?"
-            );
-            if (cascade) {
-              await markReadUpTo(c.number);
-              return;
-            }
-          }
-        }
-        await toggleChapterRead(c.id, isRead);
-        await loadChapters(); // redessine la liste : chapitres sautés, bouton « Continuer la lecture »
-      });
-      li.addEventListener("click", () => {
-        if (noLink) return; // rien à ouvrir : on peut quand même cocher le chapitre comme lu
-        window.open(c.url, "_blank", "noopener");
-        markReadUpTo(c.number);
-      });
-    }
+        return;
+      }
+      if (noLink) {
+        openChapterSheet(c); // rien à ouvrir : on propose directement les actions
+        return;
+      }
+      window.open(c.url, "_blank", "noopener");
+      markReadUpTo(c.number);
+    });
     chaptersList.appendChild(li);
   }
 }
@@ -732,4 +710,106 @@ function fitDetailInfo() {
 }
 window.addEventListener("resize", () => {
   if (!chaptersView.classList.contains("hidden")) fitDetailInfo();
+});
+
+// --- Actions d'un chapitre (appui long) ---
+const chapterSheet = document.getElementById("chapter-sheet");
+let sheetChapter = null;
+
+function openChapterSheet(c) {
+  sheetChapter = c;
+  const noLink = c.link_type === "aucun" || !c.url;
+  document.getElementById("chapter-sheet-title").textContent = `Chapitre ${c.number}`;
+  const readAt = c.read_at ? new Date(c.read_at.replace(" ", "T") + "Z") : null;
+  document.getElementById("chapter-sheet-sub").textContent = c.is_read
+    ? (readAt && !isNaN(readAt) ? `Lu le ${readAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}` : "Lu")
+    : "Pas encore lu";
+  const later = currentChapters.filter((ch) => ch.number_float > c.number_float);
+  const earlierUnread = currentChapters.some((ch) => ch.number_float < c.number_float && !ch.is_read);
+  const show = {
+    open: !noLink,
+    "open-only": !noLink && !c.is_read,
+    read: !c.is_read,
+    "read-up-to": earlierUnread,
+    unread: Boolean(c.is_read),
+    "unread-from": later.some((ch) => ch.is_read),
+  };
+  chapterSheet.querySelectorAll("[data-act]").forEach((btn) => btn.classList.toggle("hidden", show[btn.dataset.act] === false));
+  openModal(chapterSheet);
+  localStorage.setItem("stickscans_chapter_hint", "1");
+  document.getElementById("chapter-hint").classList.add("hidden");
+}
+
+chapterSheet.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-act]");
+  if (!btn || !sheetChapter) return;
+  const c = sheetChapter;
+  const act = btn.dataset.act;
+  if (act === "select") {
+    closeModal(chapterSheet);
+    setSelectionMode(true);
+    selectedChapterIds.add(c.id);
+    updateSelectionCount();
+    loadChapters();
+    return;
+  }
+  closeModal(chapterSheet);
+  if (act === "open") {
+    window.open(c.url, "_blank", "noopener");
+    markReadUpTo(c.number);
+  } else if (act === "open-only") {
+    window.open(c.url, "_blank", "noopener");
+  } else if (act === "read" || act === "unread") {
+    await toggleChapterRead(c.id, act === "read");
+    loadChapters();
+  } else if (act === "read-up-to") {
+    markReadUpTo(c.number);
+  } else if (act === "unread-from") {
+    // Ce chapitre et tous les suivants repassent en non lu (AniList n'est jamais reculé automatiquement).
+    const ids = currentChapters.filter((ch) => ch.number_float >= c.number_float && ch.is_read).map((ch) => ch.id);
+    await fetch("/api/chapters/bulk-read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chapter_ids: ids, is_read: false }),
+    });
+    loadChapters();
+  }
+});
+document.getElementById("chapter-sheet-close").addEventListener("click", () => closeModal(chapterSheet));
+closeOnBackdrop(chapterSheet);
+
+// Appui long sur un chapitre (ou clic droit à la souris) : ses actions. Le relâchement ne doit pas ouvrir le chapitre.
+let chapterPressTimer = null;
+let chapterPressStart = null;
+let chapterSwallowClick = false;
+chaptersList.addEventListener("pointerdown", (e) => {
+  chapterSwallowClick = false; // un relâchement d'appui long qui n'a pas produit de clic ne doit pas manger le suivant
+  const row = e.target.closest(".chapter-row");
+  if (!row || selectionMode || (e.pointerType === "mouse" && e.button !== 0)) return;
+  chapterPressStart = { x: e.clientX, y: e.clientY };
+  chapterPressTimer = setTimeout(() => {
+    chapterPressTimer = null;
+    chapterSwallowClick = true;
+    const c = currentChapters.find((ch) => ch.id === Number(row.dataset.id));
+    if (c) {
+      if (navigator.vibrate) navigator.vibrate(15);
+      openChapterSheet(c);
+    }
+  }, 480);
+});
+const cancelChapterPress = () => { clearTimeout(chapterPressTimer); chapterPressTimer = null; };
+chaptersList.addEventListener("pointermove", (e) => {
+  if (chapterPressTimer && chapterPressStart && Math.hypot(e.clientX - chapterPressStart.x, e.clientY - chapterPressStart.y) > 10) cancelChapterPress();
+});
+["pointerup", "pointercancel", "pointerleave"].forEach((type) => chaptersList.addEventListener(type, cancelChapterPress));
+chaptersList.addEventListener("click", (e) => {
+  if (chapterSwallowClick) { chapterSwallowClick = false; e.stopPropagation(); e.preventDefault(); }
+}, true);
+chaptersList.addEventListener("contextmenu", (e) => {
+  const row = e.target.closest(".chapter-row");
+  if (!row) return;
+  e.preventDefault();
+  if (selectionMode || e.pointerType === "touch" || chapterSwallowClick) return; // le toucher passe par l'appui long
+  const c = currentChapters.find((ch) => ch.id === Number(row.dataset.id));
+  if (c) openChapterSheet(c);
 });

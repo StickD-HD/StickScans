@@ -1001,3 +1001,20 @@ body.library-selecting .card .badge-stack { display: none; }
 .gdrive-account strong { font-size: 0.9rem; overflow-wrap: anywhere; }
 #gdrive-list { margin-top: 10px; }
 #gdrive-section .error { margin: 8px 0 0; }
+
+/* Liste des chapitres : plus de case à cocher ; état lu / non lu à droite, actions par appui long */
+#chapters-list .chapter-row { cursor: pointer; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.chapter-state { flex: none; width: 18px; display: inline-flex; justify-content: center; margin-left: auto; }
+.chapter-tag + .chapter-state { margin-left: 8px; }
+.read-mark { color: var(--muted); }
+.read-mark .ico { width: 16px; height: 16px; }
+.unread-dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.chapter-row.skipped .unread-dot::before { background: var(--error); }
+.row-select-mark {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--border); color: transparent;
+}
+.row-select-mark .ico { width: 13px; height: 13px; stroke-width: 3; }
+.chapter-row.selected .row-select-mark { background: var(--accent); border-color: var(--accent); color: #06101F; }
+.chapter-hint { margin: 0 18px 4px; font-size: 0.74rem; color: var(--muted); }
+#chapter-sheet .bulk-actions button.hidden { display: none; }
