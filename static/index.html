@@ -509,25 +509,6 @@
     </div>
   </div>
 
-  <div id="chapter-sheet" class="sheet-modal hidden">
-    <div class="sheet-modal-content">
-      <div>
-        <h2 id="chapter-sheet-title"></h2>
-        <p id="chapter-sheet-sub" class="section-label"></p>
-      </div>
-      <div class="bulk-actions">
-        <button type="button" data-act="open"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Ouvrir le chapitre</button>
-        <button type="button" data-act="open-only"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Ouvrir sans marquer comme lu</button>
-        <button type="button" data-act="read"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Marquer comme lu</button>
-        <button type="button" data-act="read-up-to"><svg class="ico" aria-hidden="true"><use href="#i-check-square"/></svg>Marquer comme lu jusqu'ici</button>
-        <button type="button" data-act="unread"><svg class="ico" aria-hidden="true"><use href="#i-rotate-ccw"/></svg>Marquer comme non lu</button>
-        <button type="button" data-act="unread-from"><svg class="ico" aria-hidden="true"><use href="#i-rotate-ccw"/></svg>Non lu à partir d'ici</button>
-        <button type="button" data-act="select"><svg class="ico" aria-hidden="true"><use href="#i-check-square"/></svg>Sélectionner plusieurs chapitres</button>
-      </div>
-      <button id="chapter-sheet-close" type="button">Fermer</button>
-    </div>
-  </div>
-
   <div id="bulk-modal" class="sheet-modal hidden">
     <div class="sheet-modal-content">
       <h2 id="bulk-modal-title">Séries sélectionnées</h2>
@@ -670,17 +651,20 @@
       </div>
       <!-- Mode sélection : barre fixée en bas de l'écran (toujours accessible pendant le défilement) -->
       <div id="chapters-toolbar" class="hidden" role="toolbar" aria-label="Chapitres sélectionnés">
-        <span id="selection-count" aria-live="polite">0 sélectionné</span>
-        <div class="toolbar-actions">
+        <div class="toolbar-top">
+          <span id="selection-count" aria-live="polite">0 sélectionné</span>
           <button id="select-all-btn" type="button">Tout</button>
-          <button id="bulk-read-btn" type="button" class="primary" aria-label="Marquer comme lus"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Lu</button>
-          <button id="bulk-unread-btn" type="button" aria-label="Marquer comme non lus">Non lu</button>
           <button id="select-cancel-btn" type="button" aria-label="Quitter la sélection"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="toolbar-actions">
+          <button id="bulk-read-btn" type="button" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Lu</button>
+          <button id="bulk-upto-btn" type="button" class="hidden" title="Ce chapitre et tous ceux d'avant"><svg class="ico" aria-hidden="true"><use href="#i-check-square"/></svg>Lu jusqu'ici</button>
+          <button id="bulk-unread-btn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-rotate-ccw"/></svg>Non lu</button>
         </div>
       </div>
     </div>
     <main>
-      <p id="chapter-hint" class="chapter-hint hidden">Appui long sur un chapitre pour le marquer lu ou non lu, et plus.</p>
+      <p id="chapter-hint" class="chapter-hint hidden">Appui long sur un chapitre pour le sélectionner (lu, non lu, lu jusqu'ici).</p>
       <ul id="chapters-list"></ul>
     </main>
   </div>

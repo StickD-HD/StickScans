@@ -1017,4 +1017,14 @@ body.library-selecting .card .badge-stack { display: none; }
 .row-select-mark .ico { width: 13px; height: 13px; stroke-width: 3; }
 .chapter-row.selected .row-select-mark { background: var(--accent); border-color: var(--accent); color: #06101F; }
 .chapter-hint { margin: 0 18px 4px; font-size: 0.74rem; color: var(--muted); }
-#chapter-sheet .bulk-actions button.hidden { display: none; }
+
+/* Barre de sélection des chapitres : compteur en haut, actions en dessous */
+#chapters-toolbar { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 14px; }
+#chapters-toolbar .toolbar-top { display: flex; align-items: center; gap: 8px; }
+#chapters-toolbar .toolbar-top #selection-count { flex: 1; }
+#chapters-toolbar .toolbar-actions { display: flex; gap: 8px; }
+#chapters-toolbar .toolbar-actions button { flex: 1; justify-content: center; padding: 10px 8px; }
+#chapters-toolbar .toolbar-actions button.hidden { display: none; }
+#chapters-toolbar button:disabled { opacity: 0.45; }
+body.selecting #chapters-view { padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 120px); }
+body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 124px); }
