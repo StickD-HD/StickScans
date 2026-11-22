@@ -470,7 +470,6 @@
           <option value="popularity">Popularité</option>
           <option value="year">Année</option>
           <option value="added_at">Date d'ajout</option>
-          <option value="anilist">Suivi par AniList</option>
         </select>
       </label>
       <label>Genre
@@ -478,6 +477,19 @@
       </label>
       <label>Statut
         <select id="status-select"><option value="">Tous les statuts</option></select>
+      </label>
+      <label>Suivi AniList
+        <select id="anilist-filter-select">
+          <option value="">Tout</option>
+          <option value="linked">Liées à AniList</option>
+          <option value="unlinked">Pas liées à AniList</option>
+          <option value="CURRENT">En cours sur AniList</option>
+          <option value="PLANNING">À lire sur AniList</option>
+          <option value="PAUSED">En pause sur AniList</option>
+          <option value="COMPLETED">Terminées sur AniList</option>
+          <option value="DROPPED">Abandonnées sur AniList</option>
+          <option value="REPEATING">En relecture sur AniList</option>
+        </select>
       </label>
       <label class="checkbox-label">
         <input type="checkbox" id="hide-read-checkbox">

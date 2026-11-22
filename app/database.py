@@ -386,9 +386,13 @@ def _apply_display_cover(series: dict) -> dict:
     return series
 
 
+ANILIST_STATUSES = ("CURRENT", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REPEATING")
+
+
 def get_all_series(sort: str = "last_checked_at", hide_fully_read: bool = False,
                     genre: str | None = None, status: str | None = None,
-                    search: str | None = None, category_id: int | None = None) -> list[dict]:
+                    search: str | None = None, category_id: int | None = None,
+                    anilist: str | None = None) -> list[dict]:
     order_map = {
         # Trie par date du dernier chapitre réellement découvert après l'ajout
         # (pas juste "dernière vérification", qui bouge pour toutes les séries à chaque passage).
@@ -397,12 +401,6 @@ def get_all_series(sort: str = "last_checked_at", hide_fully_read: bool = False,
         "popularity": "s.popularity DESC",
         "year": "s.year DESC",
         "added_at": "s.added_at DESC",
-        # Séries suivies sur AniList d'abord, regroupées par statut AniList (en cours, à relire, à lire, en pause,
-        # terminées, abandonnées), puis les séries non liées ; par titre à l'intérieur de chaque groupe.
-        "anilist": """CASE WHEN s.anilist_id IS NULL THEN 9 ELSE CASE s.anilist_status
-                           WHEN 'CURRENT' THEN 0 WHEN 'REPEATING' THEN 1 WHEN 'PLANNING' THEN 2 WHEN 'PAUSED' THEN 3
-                           WHEN 'COMPLETED' THEN 4 WHEN 'DROPPED' THEN 5 ELSE 6 END END,
-                      s.title COLLATE NOCASE ASC""",
     }
     order_clause = order_map.get(sort, "s.last_checked_at DESC")
 
@@ -422,6 +420,14 @@ def get_all_series(sort: str = "last_checked_at", hide_fully_read: bool = False,
     if category_id:
         conditions.append("s.id IN (SELECT series_id FROM series_categories WHERE category_id = ?)")
         params.append(category_id)
+    # Suivi AniList : « linked » (liée), « unlinked » (pas liée) ou un statut AniList (CURRENT, COMPLETED…).
+    if anilist == "linked":
+        conditions.append("s.anilist_id IS NOT NULL")
+    elif anilist == "unlinked":
+        conditions.append("s.anilist_id IS NULL")
+    elif anilist in ANILIST_STATUSES:
+        conditions.append("s.anilist_id IS NOT NULL AND s.anilist_status = ?")
+        params.append(anilist)
 
     where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     having_clause = "HAVING unread_count > 0" if hide_fully_read else ""

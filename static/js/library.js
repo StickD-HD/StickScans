@@ -8,6 +8,7 @@ const refreshStatusText = document.getElementById("refresh-status-text");
 const sortSelect = document.getElementById("sort-select");
 const statusSelect = document.getElementById("status-select");
 const genreSelect = document.getElementById("genre-select");
+const anilistFilterSelect = document.getElementById("anilist-filter-select");
 const hideReadCheckbox = document.getElementById("hide-read-checkbox");
 const searchInput = document.getElementById("search-input");
 const searchToggleBtn = document.getElementById("search-toggle-btn");
@@ -106,6 +107,7 @@ function updateToolbarIndicators() {
     sortSelect.value && sortSelect.value !== "last_checked_at",
     genreSelect.value,
     statusSelect.value,
+    anilistFilterSelect.value,
     hideReadCheckbox.checked,
   ].filter(Boolean).length;
   filterToggleBtn.classList.toggle("active", active > 0);
@@ -119,6 +121,7 @@ function saveFilters() {
     sort: sortSelect.value,
     status: statusSelect.value,
     genre: genreSelect.value,
+    anilist: anilistFilterSelect.value,
     hideRead: hideReadCheckbox.checked,
     search: searchInput.value,
     categoryId: activeCategoryId,
@@ -144,6 +147,7 @@ async function loadLibrary() {
   if (activeCategoryId) params.set("category_id", activeCategoryId);
   if (genreSelect.value) params.set("genre", genreSelect.value);
   if (statusSelect.value) params.set("status", statusSelect.value);
+  if (anilistFilterSelect.value) params.set("anilist", anilistFilterSelect.value);
   if (searchInput.value.trim()) params.set("search", searchInput.value.trim());
 
   const res = await fetch(`/api/series?${params}`);
@@ -154,7 +158,7 @@ async function loadLibrary() {
   emptyMsg.classList.toggle("hidden", series.length > 0);
   if (series.length === 0) {
     // Bibliothèque vide : on propose d'ajouter une série ; filtres trop stricts : on le dit.
-    const filtered = Boolean(activeCategoryId || genreSelect.value || statusSelect.value || hideReadCheckbox.checked || searchInput.value.trim());
+    const filtered = Boolean(activeCategoryId || genreSelect.value || statusSelect.value || anilistFilterSelect.value || hideReadCheckbox.checked || searchInput.value.trim());
     emptyText.textContent = filtered ? "Aucune série ne correspond à ta recherche ou à tes filtres." : "Aucune série suivie pour l'instant.";
     emptyAddBtn.classList.toggle("hidden", filtered);
   }
@@ -246,6 +250,7 @@ categorySelect.addEventListener("change", () => {
 });
 sortSelect.addEventListener("change", loadLibrary);
 statusSelect.addEventListener("change", loadLibrary);
+anilistFilterSelect.addEventListener("change", loadLibrary);
 genreSelect.addEventListener("change", loadLibrary);
 hideReadCheckbox.addEventListener("change", loadLibrary);
 searchInput.addEventListener("input", () => {

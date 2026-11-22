@@ -1,4 +1,4 @@
-"""Actions groupées sur plusieurs séries, tri « Suivi par AniList » et sauvegarde Google Drive (Google simulé)."""
+"""Actions groupées sur plusieurs séries, filtre « Suivi AniList » et sauvegarde Google Drive (Google simulé)."""
 import sqlite3
 from contextlib import closing
 
@@ -55,13 +55,19 @@ def test_suppression_groupee_et_action_inconnue(db, three):
         bulk(three, "formater")
 
 
-def test_tri_suivi_anilist(db, three):
+def test_filtre_suivi_anilist(db, three):
     db.set_series_anilist_link(three[2], 1, "x")
     db.set_series_anilist_link(three[1], 2, "y")
     with db.get_conn() as conn:
-        conn.execute("UPDATE series SET anilist_status = 'PAUSED' WHERE id = ?", (three[2],))
+        conn.execute("UPDATE series SET anilist_status = 'COMPLETED' WHERE id = ?", (three[2],))
         conn.execute("UPDATE series SET anilist_status = 'CURRENT' WHERE id = ?", (three[1],))
-    assert [s["id"] for s in db.get_all_series(sort="anilist")] == [three[1], three[2], three[0]]
+    ids = lambda f: sorted(s["id"] for s in db.get_all_series(anilist=f))
+    assert ids("linked") == sorted(three[1:])
+    assert ids("unlinked") == [three[0]]
+    assert ids("COMPLETED") == [three[2]]
+    assert ids("CURRENT") == [three[1]]
+    assert ids("PAUSED") == []
+    assert ids("n'importe quoi") == sorted(three)
 
 
 # --- Google Drive ---

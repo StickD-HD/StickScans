@@ -317,9 +317,9 @@ def app_version():
 @app.get("/api/series")
 def list_series(sort: str = "last_checked_at", hide_fully_read: bool = False,
                  genre: str | None = None, status: str | None = None, search: str | None = None,
-                 category_id: int | None = None):
-    return database.get_all_series(sort=sort, hide_fully_read=hide_fully_read,
-                                     genre=genre, status=status, search=search, category_id=category_id)
+                 category_id: int | None = None, anilist: str | None = None):
+    return database.get_all_series(sort=sort, hide_fully_read=hide_fully_read, genre=genre, status=status,
+                                     search=search, category_id=category_id, anilist=anilist)
 
 
 @app.get("/api/genres")

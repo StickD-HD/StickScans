@@ -9,6 +9,8 @@ async function init() {
 
   const saved = getSavedFilters();
   if (saved.sort) sortSelect.value = saved.sort;
+  if (!sortSelect.value) sortSelect.value = "last_checked_at"; // tri enregistré qui n'existe plus
+  if (saved.anilist) anilistFilterSelect.value = saved.anilist;
   if (saved.search) {
     searchInput.value = saved.search;
     searchBar.classList.remove("hidden");
