@@ -1213,7 +1213,16 @@ header .icon-btn, header > button, header .menu-wrap > button, header .header-ac
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 header .icon-btn.active { background: var(--accent-soft); border-color: var(--accent); }
-#detail-backdrop { top: calc(-90px - env(safe-area-inset-top, 0px)); height: calc(420px + env(safe-area-inset-top, 0px)); }
-/* Le titre de l'écran s'efface dès qu'on fait défiler : seuls les boutons restent par-dessus le contenu */
-header h1 { transition: opacity 0.18s ease, transform 0.18s ease; }
-body.scrolled header h1 { opacity: 0; transform: translateY(-6px); pointer-events: none; }
+/* Le fond flouté monte bien au-delà du haut de l'écran : le bord (que le flou rend transparent) est hors de vue,
+   la zone de l'heure / de l'encoche prend donc la couleur de la couverture, sans démarcation. */
+#detail-backdrop { top: calc(-220px - env(safe-area-inset-top, 0px)); height: calc(560px + env(safe-area-inset-top, 0px));
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0, 0, 0, 0.55) 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0, 0, 0, 0.55) 70%, transparent 100%); }
+/* Titre (et logo) flottants comme les boutons : dans une pastille pleine, lisibles par-dessus le contenu */
+header h1 {
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: var(--radius-pill);
+  background: var(--surface-high); border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+header h1.brand { padding: 0 14px 0 4px; }
+header h1.brand .brand-mark { width: 32px; height: 32px; }
