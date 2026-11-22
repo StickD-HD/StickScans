@@ -1201,23 +1201,26 @@ body.scrolled header { box-shadow: 0 1px 0 rgba(32, 43, 72, 0.7); }
 .detail-loading #detail-actions, .detail-loading #detail-synopsis-wrap { opacity: 0.35; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { #detail-cover { opacity: 1; } }
 
-/* --- Fiche : pas de barre du haut, seulement des boutons flottants en verre ; le fond flouté de la couverture
-   monte jusque sous l'encoche, et un léger fondu (sans coupure nette) protège l'heure quand on fait défiler --- */
-#chapters-view header {
-  background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none !important;
-  pointer-events: none;
+/* --- En-têtes de tous les écrans : plus de bandeau, des boutons flottants en verre ; un fondu doux depuis le haut
+   (même couleur que le fond de l'appli, donc que la zone de l'heure sur iPhone) garde titres et heure lisibles
+   sans aucune coupure nette. Sur la fiche, le fondu n'apparaît qu'en faisant défiler, pour laisser voir le fond
+   flouté de la couverture. --- */
+header {
+  background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+  box-shadow: none !important; pointer-events: none; isolation: isolate;
 }
-#chapters-view header > * { pointer-events: auto; }
-#chapters-view header > button, #chapters-view header .menu-wrap > button {
-  background: rgba(23, 32, 56, 0.62); border-color: rgba(255, 255, 255, 0.06);
+header > * { pointer-events: auto; }
+header::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: -28px; z-index: -1; pointer-events: none;
+  background: linear-gradient(to bottom, #080D18 0%, rgba(8, 13, 24, 0.96) 55%, rgba(8, 13, 24, 0.7) 78%, rgba(8, 13, 24, 0) 100%);
+  transition: opacity 0.2s ease;
+}
+header .icon-btn, header > button, header .menu-wrap > button, header .header-actions > button {
+  background: rgba(23, 32, 56, 0.66); border-color: rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
-#chapters-view header::before {
-  content: ""; position: absolute; left: 0; right: 0; top: 0; z-index: -1; pointer-events: none;
-  height: calc(env(safe-area-inset-top, 0px) + 28px);
-  background: linear-gradient(to bottom, rgba(8, 13, 24, 0.92) 0%, rgba(8, 13, 24, 0.6) 55%, rgba(8, 13, 24, 0) 100%);
-  opacity: 0; transition: opacity 0.2s ease;
-}
+header .icon-btn.active { background: rgba(20, 36, 66, 0.85); border-color: var(--accent); }
+#chapters-view header::before { opacity: 0; bottom: auto; height: calc(env(safe-area-inset-top, 0px) + 30px); }
 body.scrolled #chapters-view header::before { opacity: 1; }
 #detail-backdrop { top: calc(-90px - env(safe-area-inset-top, 0px)); height: calc(420px + env(safe-area-inset-top, 0px)); }
