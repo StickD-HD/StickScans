@@ -1218,11 +1218,7 @@ header .icon-btn.active { background: var(--accent-soft); border-color: var(--ac
 #detail-backdrop { top: calc(-220px - env(safe-area-inset-top, 0px)); height: calc(560px + env(safe-area-inset-top, 0px));
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0, 0, 0, 0.55) 70%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0, 0, 0, 0.55) 70%, transparent 100%); }
-/* Titre (et logo) flottants comme les boutons : dans une pastille pleine, lisibles par-dessus le contenu */
-header h1 {
-  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: var(--radius-pill);
-  background: var(--surface-high); border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-}
-header h1.brand { padding: 0 14px 0 4px; }
-header h1.brand .brand-mark { width: 32px; height: 32px; }
+/* En-têtes : ils restent en haut de la page et défilent avec elle (titre sans fond). Seule la fiche garde
+   ses boutons Retour et ⋮ flottants pendant le défilement. */
+header { position: relative; }
+#chapters-view header { position: sticky; }
