@@ -113,6 +113,24 @@ def _popularity(value_tag) -> int | None:
     return None
 
 
+def _team_id(href: str) -> str:
+    """Identifiant d'une team dans son adresse : /team-1206/Poseidon-Scans.html -> « 1206 »."""
+    m = re.search(r"/team-(\d+)", href or "")
+    return m.group(1) if m else (href or "")
+
+
+def _main_team(team_links: list[tuple[str, str]], latest_team: tuple[str, str] | None) -> str | None:
+    """Team principale : celle qui a publié le dernier chapitre. Son nom complet est pris dans la case « Plateforme »
+    (le dernier chapitre l'abrège parfois : « Poséidon » pour « Poséidon Scans »). None si le site ne l'indique pas."""
+    if not latest_team:
+        return None
+    name, team_id = latest_team
+    for full_name, other_id in team_links:
+        if other_id == team_id and full_name:
+            return full_name
+    return name or None
+
+
 def _clean_synopsis(tag):
     if not tag:
         return None
@@ -142,6 +160,8 @@ def parse_series_page(html: str) -> dict:
     status = author = category = year = editor = team = platform = None
     popularity = None
     genres = []
+    team_links: list[tuple[str, str]] = []  # (nom, adresse) des teams de la case « Plateforme »
+    latest_team: tuple[str, str] | None = None  # team qui a publié le dernier chapitre (case « Dernier chapitre »)
 
     labels = soup.select(".contenu_titres_fiche_technique li")
     values = soup.select(".contenu_texte_fiche_technique li")
@@ -177,11 +197,17 @@ def parse_series_page(html: str) -> dict:
             # qui publie la série (liens /plateforme-…, ex. Webtoons).
             links = value_tag.select("a[href]")
             teams = [a.get_text(strip=True) for a in links if "/team-" in a["href"]]
+            team_links = [(a.get_text(strip=True), _team_id(a["href"])) for a in links if "/team-" in a["href"]]
             platforms = [a.get_text(strip=True) for a in links if "/plateforme-" in a["href"]]
             team = ", ".join(n for n in teams if n) or team
             platform = ", ".join(n for n in platforms if n) or None
         elif "popularit" in label_text:
             popularity = _popularity(value_tag)
+        elif "dernier chapitre" in label_text:
+            # « Webtoon Ch 127 (Poséidon) » : la team entre parenthèses est celle qui traduit la série en ce moment.
+            link = value_tag.select_one('a[href*="/team-"]')
+            if link:
+                latest_team = (link.get_text(strip=True), _team_id(link["href"]))
 
     if labels and not values:
         # Page tronquée côté site : on refuse plutôt que d'écraser les données déjà en base par du vide.
@@ -216,6 +242,7 @@ def parse_series_page(html: str) -> dict:
         "editor": editor,
         "team": team,
         "platform": platform,
+        "main_team": _main_team(team_links, latest_team),
         "popularity": popularity,
         "genres": genres,
         "last_chapter_number": last_chapter_number,

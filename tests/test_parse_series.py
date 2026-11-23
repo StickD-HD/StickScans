@@ -138,3 +138,27 @@ def test_vraie_fiche_chapitres(real_html):
     assert all(chapters[str(n)]["link_type"] == "site" for n in range(116, 128))
     # Chapitres licenciés : lien webtoons.com volontairement pas conservé.
     assert all(chapters[n] == {"number": n, "url": "", "link_type": "aucun"} for n in ("115", "114", "113", "2", "1"))
+
+
+def test_team_principale_parmi_plusieurs(real_html):
+    """Plusieurs teams dans « Plateforme » : la principale est celle qui a publié le dernier chapitre (même adresse
+    /team-…), avec son nom complet ; la liste complète reste disponible."""
+    assert new_team_html_present(real_html)
+    many = real_html.replace(
+        '<a itemprop="name" href="https://www.scan-manga.com/team-1206/Poseidon-Scans.html" style="font-size:70%">Poséidon Scans</a>',
+        '<a href="https://www.scan-manga.com/team-11/Astral-Scans.html">Astral Scans</a>'
+        '<a href="https://www.scan-manga.com/team-22/Flame-Scans-FR.html">Flame Scans FR</a>'
+        '<a itemprop="name" href="https://www.scan-manga.com/team-1206/Poseidon-Scans.html" style="font-size:70%">Poséidon Scans</a>'
+        '<a href="https://www.scan-manga.com/team-33/Reaper-Scans.html">Reaper Scans</a>')
+    data = parse_series_page(many)
+    assert data["team"] == "Astral Scans, Flame Scans FR, Poséidon Scans, Reaper Scans"
+    assert data["main_team"] == "Poséidon Scans"
+
+
+def test_team_principale_inconnue(series_html):
+    # Le dernier chapitre ne cite aucune team : pas de team principale (l'appli affiche alors la liste complète).
+    assert parse_series_page(series_html)["main_team"] is None
+
+
+def new_team_html_present(html: str) -> bool:
+    return '<a itemprop="name" href="https://www.scan-manga.com/team-1206/Poseidon-Scans.html" style="font-size:70%">Poséidon Scans</a>' in html
