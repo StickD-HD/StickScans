@@ -827,9 +827,12 @@ chaptersList.addEventListener("pointerdown", (e) => {
   const row = e.target.closest(".chapter-row");
   if (!row || selectionMode || (e.pointerType === "mouse" && e.button !== 0)) return;
   chapterPressStart = { x: e.clientX, y: e.clientY };
+  pressedRow = row;
+  row.classList.add("pressing"); // la ligne se remplit de gauche à droite pendant l'appui
   chapterPressTimer = setTimeout(() => {
     chapterPressTimer = null;
     chapterSwallowClick = true;
+    showLongPressDone(row);
     const c = currentChapters.find((ch) => ch.id === Number(row.dataset.id));
     if (c) {
       if (navigator.vibrate) navigator.vibrate(15);
@@ -837,7 +840,13 @@ chaptersList.addEventListener("pointerdown", (e) => {
     }
   }, 480);
 });
-const cancelChapterPress = () => { clearTimeout(chapterPressTimer); chapterPressTimer = null; };
+let pressedRow = null;
+const cancelChapterPress = () => {
+  clearTimeout(chapterPressTimer);
+  chapterPressTimer = null;
+  if (pressedRow) pressedRow.classList.remove("pressing");
+  pressedRow = null;
+};
 chaptersList.addEventListener("pointermove", (e) => {
   if (chapterPressTimer && chapterPressStart && Math.hypot(e.clientX - chapterPressStart.x, e.clientY - chapterPressStart.y) > 10) cancelChapterPress();
 });

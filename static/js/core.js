@@ -217,6 +217,15 @@ function prepareSheet(el) {
 document.addEventListener("load", (e) => { if (e.target.tagName === "IMG") e.target.classList.add("loaded"); }, true);
 document.addEventListener("error", (e) => { if (e.target.tagName === "IMG") e.target.classList.add("loaded"); }, true);
 
+// Appui long réussi : petit rebond de l'élément (carte ou chapitre) pour confirmer.
+function showLongPressDone(el) {
+  el.classList.remove("pressing");
+  el.classList.remove("long-pressed");
+  void el.offsetWidth;
+  el.classList.add("long-pressed");
+  setTimeout(() => el.classList.remove("long-pressed"), 320);
+}
+
 // Image déjà en cache : affichée tout de suite, sans fondu (retour à la bibliothèque, changement de filtre).
 function markCached(root) {
   root.querySelectorAll("img:not(.loaded)").forEach((img) => {

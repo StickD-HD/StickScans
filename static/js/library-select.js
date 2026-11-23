@@ -63,14 +63,23 @@ grid.addEventListener("pointerdown", (e) => {
   const card = e.target.closest(".card");
   if (!card || librarySelecting || (e.pointerType === "mouse" && e.button !== 0)) return;
   pressStart = { x: e.clientX, y: e.clientY };
+  pressedCard = card;
+  card.classList.add("pressing"); // la couverture s'enfonce doucement pendant l'appui
   pressTimer = setTimeout(() => {
     pressTimer = null;
     swallowClick = true;
+    showLongPressDone(card);
     setLibrarySelecting(true, Number(card.dataset.id));
     if (navigator.vibrate) navigator.vibrate(15);
   }, 480);
 });
-const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+let pressedCard = null;
+const cancelPress = () => {
+  clearTimeout(pressTimer);
+  pressTimer = null;
+  if (pressedCard) pressedCard.classList.remove("pressing");
+  pressedCard = null;
+};
 grid.addEventListener("pointermove", (e) => {
   if (pressTimer && pressStart && Math.hypot(e.clientX - pressStart.x, e.clientY - pressStart.y) > 10) cancelPress();
 });

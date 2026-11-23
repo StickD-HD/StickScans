@@ -1250,3 +1250,18 @@ header { position: relative; }
 /* Fond de la fiche : une toute petite image agrandie (flou naturel, calculé une fois) au lieu d'un flou en direct */
 #detail-backdrop { filter: none; transform: none; opacity: 0.42; background: none !important; overflow: hidden; }
 #detail-backdrop canvas { width: 100%; height: 100%; display: block; }
+
+/* --- Appui long : on voit l'appui progresser, puis un petit rebond quand il a pris --- */
+.card.pressing .cover-wrap { transform: scale(0.92); transition: transform 0.48s cubic-bezier(0.3, 0, 0.5, 1); }
+.card.pressing img { filter: brightness(0.82); transition: filter 0.48s ease; }
+@keyframes long-press-pop { 0% { transform: scale(0.92); } 55% { transform: scale(1.04); } 100% { transform: none; } }
+.card.long-pressed .cover-wrap { animation: long-press-pop 0.3s var(--ease-out); }
+#chapters-list .chapter-row { position: relative; overflow: hidden; }
+#chapters-list .chapter-row::after {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit;
+  background: var(--accent-soft); transform: scaleX(0); transform-origin: left center; opacity: 0;
+}
+#chapters-list .chapter-row > * { position: relative; z-index: 1; }
+#chapters-list .chapter-row.pressing::after { transform: scaleX(1); opacity: 1; transition: transform 0.48s linear, opacity 0.1s ease; }
+@keyframes row-pop { 0% { transform: scale(0.985); } 55% { transform: scale(1.012); } 100% { transform: none; } }
+#chapters-list .chapter-row.long-pressed { animation: row-pop 0.28s var(--ease-out); background: var(--accent-soft); }
