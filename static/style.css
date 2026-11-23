@@ -230,7 +230,7 @@ main#library { padding: 0 18px; }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px 10px;
 }
 @media (min-width: 560px) {
@@ -1242,12 +1242,11 @@ header { position: relative; }
 .cover-wrap img, .update-row img, #detail-cover { opacity: 1 !important; transition: none; }
 .card img, .update-row img { box-shadow: none; }
 .badge { box-shadow: none; }
-.card .cover-wrap { contain: layout paint; }
 /* Grandes listes : le navigateur ne dessine que ce qui est à l'écran */
-#grid .card, .update-row, #chapters-list .chapter-row { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+/* (pas sur les cartes de la grille : en affichage auto, la largeur des colonnes dépend de leur contenu) */
+.update-row, #chapters-list .chapter-row { content-visibility: auto; }
 .update-row { contain-intrinsic-size: auto 72px; }
 #chapters-list .chapter-row { contain-intrinsic-size: auto 46px; }
-.grid.list .card { contain-intrinsic-size: auto 90px; }
 /* Fond de la fiche : une toute petite image agrandie (flou naturel, calculé une fois) au lieu d'un flou en direct */
 #detail-backdrop { filter: none; transform: none; opacity: 0.42; background: none !important; overflow: hidden; }
 #detail-backdrop canvas { width: 100%; height: 100%; display: block; }
