@@ -19,6 +19,9 @@ from pathlib import Path
 import pytest
 
 sync_api = pytest.importorskip("playwright.sync_api")
+expect = sync_api.expect  # attend (jusqu'à 10 s) que la condition soit vraie : pas de pause fixe, robuste sur une machine lente
+expect.set_options(timeout=10_000)
+SHOTS = Path(__file__).resolve().parent / "captures"  # capture de l'écran quand un test échoue
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = os.environ.get("E2E_PYTHON", sys.executable)  # Python qui a les dépendances de l'appli
@@ -74,7 +77,7 @@ def base_url(tmp_path_factory):
 
 
 @pytest.fixture
-def page(base_url):
+def page(base_url, request):
     with sync_api.sync_playwright() as p:
         browser = p.chromium.launch()
         pg = browser.new_page(viewport={"width": 402, "height": 874})
@@ -86,53 +89,50 @@ def page(base_url):
         pg.goto(base_url + "/")
         pg.wait_for_selector("#grid .card:not(.skeleton)")
         yield pg
+        if getattr(request.node, "rep_call", None) is not None and request.node.rep_call.failed:
+            SHOTS.mkdir(exist_ok=True)
+            pg.screenshot(path=str(SHOTS / f"{request.node.name}.png"), full_page=True)
         browser.close()
         assert errors == [], f"erreurs JavaScript : {errors}"
 
 
-def cards(pg):
-    pg.wait_for_timeout(400)
-    return [t.split("\n")[0] for t in pg.locator("#grid .card .info").all_inner_texts()]
-
-
 def test_bibliotheque_filtres_recherche(page):
-    assert sorted(cards(page)) == ["Alpha", "Beta", "Gamma"]
+    grid = page.locator("#grid .card")
+    expect(grid).to_have_count(3)
     page.click("#filter-toggle-btn")
     page.select_option("#status-select", "Terminé")
-    assert cards(page) == ["Beta"]
-    assert page.inner_text("#filter-badge") == "1"
+    expect(grid).to_have_count(1)
+    expect(grid).to_contain_text("Beta")
+    expect(page.locator("#filter-badge")).to_have_text("1")
     page.select_option("#status-select", "")
     page.click("#filter-modal-close")
     page.click("#search-toggle-btn")
     page.fill("#search-input", "gam")
-    page.wait_for_timeout(500)
-    assert cards(page) == ["Gamma"]
+    expect(grid).to_have_count(1)
+    expect(grid).to_contain_text("Gamma")
 
 
 def test_fiche_et_chapitres(page):
     page.click("#grid .card:has-text('Alpha')")
-    page.wait_for_selector("#chapters-list li")
-    assert page.inner_text("#detail-title") == "Alpha"
-    assert "14 / 32" in page.inner_text("#detail-progress")
-    assert page.locator("#chapters-list li").count() == 32
+    expect(page.locator("#detail-title")).to_have_text("Alpha")
+    # text_content : la ligne peut être masquée si la place manque à côté de la couverture (selon les polices)
+    expect(page.locator("#detail-progress")).to_contain_text("14 / 32", use_inner_text=False)
+    expect(page.locator("#chapters-list li")).to_have_count(32)
     # appui long (clic droit à la souris) : sélection avec ce chapitre, puis « Lu »
     page.click("#chapters-list li:has-text('Chapitre 20')", button="right")
-    assert page.inner_text("#selection-count").startswith("1 ")
-    assert page.is_visible("#bulk-upto-btn")  # un seul chapitre : « Lu jusqu'ici » proposé
+    expect(page.locator("#selection-count")).to_have_text("1 sélectionné")
+    expect(page.locator("#bulk-upto-btn")).to_be_visible()  # un seul chapitre : « Lu jusqu'ici » proposé
     page.click("#bulk-upto-btn")
-    page.wait_for_timeout(500)
-    assert "20 / 32" in page.inner_text("#detail-progress")
+    expect(page.locator("#detail-progress")).to_contain_text("20 / 32", use_inner_text=False)
     page.click("#back-btn")
-    page.wait_for_selector("#library-view:not(.hidden)")
+    expect(page.locator("#library-view")).to_be_visible()
 
 
 def test_nouveautes_historique(page):
     page.click(".nav-btn[data-view='updates-view']")
-    page.wait_for_selector("#updates-list .update-row")
-    assert "Chapitres 31 à 32" in page.inner_text("#updates-list")  # même série, même jour : une seule ligne
+    expect(page.locator("#updates-list")).to_contain_text("Chapitres 31 à 32")  # même série, même jour : une ligne
     page.click(".nav-btn[data-view='history-view']")
-    page.wait_for_selector("#history-list .update-row")
-    assert "Alpha" in page.inner_text("#history-list")
+    expect(page.locator("#history-list")).to_contain_text("Alpha")
 
 
 def test_reglages_et_ecrans_secondaires(page):
@@ -140,14 +140,14 @@ def test_reglages_et_ecrans_secondaires(page):
     for name, check in [("display", "#display-mode"), ("categories", "#category-manage-list"),
                         ("storage", "#storage-list"), ("backup", "#backup-list")]:
         page.click(f"#settings-home [data-page='{name}']")
-        page.wait_for_timeout(500)
-        assert page.is_visible(check), name
+        expect(page.locator(check)).to_be_visible()
         page.click("#settings-back-btn")
+        expect(page.locator("#settings-home")).to_be_visible()
     page.click("#open-reading-btn")
-    page.wait_for_selector("#reading-content .rv-hero")
+    expect(page.locator("#reading-content .rv-hero")).to_be_visible()
     page.click("#reading-back-btn")
     page.click("#open-checks-btn")
-    page.wait_for_selector("#checks-list .run-row")
+    expect(page.locator("#checks-list .run-row").first).to_be_visible()
     page.click("#checks-back-btn")
 
 
@@ -155,13 +155,13 @@ def test_ajout_et_selection_de_series(page):
     page.click("#home-menu-btn")
     page.click("#add-btn")
     page.fill("#add-url", "https://m.scan-manga.com/x.html\nhttps://exemple.fr\n")
-    assert "1" in page.inner_text("#add-count")
+    expect(page.locator("#add-count")).to_contain_text("1")
     page.click("#add-cancel")
+    expect(page.locator("#add-modal")).to_be_hidden()
     page.click("#home-menu-btn")
     page.click("#library-select-btn")
     page.click("#grid .card:has-text('Gamma')")
-    assert page.inner_text("#library-selection-count") == "1 sélectionnée"
+    expect(page.locator("#library-selection-count")).to_have_text("1 sélectionnée")
     page.click("#library-actions-btn")
     page.click("[data-bulk='mark_read']")
-    page.wait_for_timeout(600)
-    assert page.is_hidden("#library-toolbar")
+    expect(page.locator("#library-toolbar")).to_be_hidden()

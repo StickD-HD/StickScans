@@ -90,3 +90,11 @@ def _pas_de_couvertures_en_arriere_plan(monkeypatch):
     """Les tests ne téléchargent jamais de vraies couvertures."""
     from app import covers
     monkeypatch.setattr(covers, "cache_in_background", lambda: None)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Garde le résultat de chaque étape sur le test (sert aux tests d'interface : capture d'écran en cas d'échec)."""
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)

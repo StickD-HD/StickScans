@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -28,12 +28,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements*.txt
       - run: pip install -r requirements-dev.txt playwright==1.65.2
       - run: python -m playwright install --with-deps chromium
-      - run: python -m pytest -q tests/e2e
+      - run: python -m pytest -v --tb=short tests/e2e
+      # En cas d'échec : captures d'écran des tests ratés, à télécharger en bas de la page du lancement (« Artifacts »)
+      - if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: captures-interface
+          path: tests/e2e/captures/
+          if-no-files-found: ignore
