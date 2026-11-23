@@ -87,7 +87,13 @@ def _seconds_to_next_day(ts: float) -> float:
     return 86400 - (ts % 86400)
 
 
-def reserve(now: float | None = None) -> tuple[str, float]:
+# Demande faite par toi (ajout d'une série, « Actualiser », nouvelle adresse) : elle passe devant les vérifications
+# automatiques, avec seulement 20 s minimum depuis la requête précédente (rythme d'une personne qui navigue) ; les
+# vérifications automatiques reprennent ensuite après un écart normal (45 à 90 s). Pause et plafond quotidien inchangés.
+INTERACTIVE_MIN_GAP_SECONDS = max(MIN_GAP_FLOOR_SECONDS, float(os.environ.get("FETCH_INTERACTIVE_GAP_SECONDS", "20") or 20))
+
+
+def reserve(now: float | None = None, interactive: bool = False) -> tuple[str, float]:
     """Demande le droit d'envoyer UNE requête maintenant. Renvoie (réponse, secondes) :
     - ("ok", 0)        : autorisé, la requête est comptée ;
     - ("wait", s)      : une autre requête vient de partir, réessayer dans s secondes ;
@@ -105,9 +111,15 @@ def reserve(now: float | None = None) -> tuple[str, float]:
         if int(st.get("requests_today") or 0) >= DAILY_LIMIT:
             return "quota", _seconds_to_next_day(now)
         next_slot = float(st.get("next_slot") or 0)
-        if next_slot > now:
+        if interactive:
+            ready_at = float(st.get("last_request_at") or 0) + INTERACTIVE_MIN_GAP_SECONDS
+            if ready_at > now:
+                return "wait", ready_at - now
+            st["next_slot"] = max(next_slot, now + random.uniform(MIN_GAP_SECONDS, MAX_GAP_SECONDS))
+        elif next_slot > now:
             return "wait", next_slot - now
-        st["next_slot"] = now + random.uniform(MIN_GAP_SECONDS, MAX_GAP_SECONDS)
+        else:
+            st["next_slot"] = now + random.uniform(MIN_GAP_SECONDS, MAX_GAP_SECONDS)
         st["requests_today"] = int(st.get("requests_today") or 0) + 1
         st["last_request_at"] = now
         per_day = st.get("per_day") if isinstance(st.get("per_day"), dict) else {}

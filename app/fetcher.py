@@ -78,12 +78,12 @@ def _retry_after(resp) -> float | None:
         return None
 
 
-def _wait_for_slot(max_wait: float) -> None:
+def _wait_for_slot(max_wait: float, interactive: bool = False) -> None:
     deadline = time.monotonic() + max_wait
     while True:
         if STOP.is_set():
             raise SiteBusy("Arrêt de l'appli en cours")
-        answer, seconds = site_guard.reserve()
+        answer, seconds = site_guard.reserve(interactive=interactive)
         if answer == "ok":
             return
         if answer == "blocked":
@@ -97,14 +97,17 @@ def _wait_for_slot(max_wait: float) -> None:
         STOP.wait(seconds + 0.05)  # comme time.sleep, mais interrompu net par un arrêt de l'appli
 
 
-def fetch_html(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float | None = None) -> str:
-    """max_wait : attente maximale (en secondes) de son tour avant d'envoyer la requête."""
-    return fetch_page(url, timeout_ms, max_wait)[0]
+def fetch_html(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float | None = None,
+               interactive: bool = False) -> str:
+    """max_wait : attente maximale (en secondes) de son tour avant d'envoyer la requête.
+    interactive : demande faite par l'utilisateur, prioritaire sur les vérifications automatiques (voir site_guard)."""
+    return fetch_page(url, timeout_ms, max_wait, interactive)[0]
 
 
-def fetch_page(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float | None = None) -> tuple[str, str]:
+def fetch_page(url: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, max_wait: float | None = None,
+               interactive: bool = False) -> tuple[str, str]:
     """Comme fetch_html, mais renvoie aussi l'adresse finale (différente de url si le site a redirigé)."""
-    _wait_for_slot(site_guard.MAX_GAP_SECONDS + 15 if max_wait is None else max_wait)
+    _wait_for_slot(site_guard.MAX_GAP_SECONDS + 15 if max_wait is None else max_wait, interactive)
     try:
         resp = _session.get(url, timeout=(10, min(timeout_ms, DEFAULT_TIMEOUT_MS) / 1000))
     except requests.RequestException as e:

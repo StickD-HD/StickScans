@@ -24,6 +24,18 @@ def test_une_requete_a_la_fois(guard):
     assert guard.reserve(now=1000.0 + guard.MAX_GAP_SECONDS + 1)[0] == "ok"
 
 
+def test_demande_de_l_utilisateur_prioritaire(guard):
+    """Ajout / « Actualiser » : passe devant les vérifications auto, mais jamais moins de 20 s après la précédente."""
+    assert guard.reserve(now=1000.0) == ("ok", 0.0)  # vérification automatique
+    answer, wait = guard.reserve(now=1005.0, interactive=True)
+    assert answer == "wait" and wait == pytest.approx(guard.INTERACTIVE_MIN_GAP_SECONDS - 5)
+    assert guard.INTERACTIVE_MIN_GAP_SECONDS >= 20
+    assert guard.reserve(now=1000.0 + guard.INTERACTIVE_MIN_GAP_SECONDS, interactive=True)[0] == "ok"
+    # la vérification automatique suivante attend ensuite un écart normal après la demande de l'utilisateur
+    answer, wait = guard.reserve(now=1000.0 + guard.INTERACTIVE_MIN_GAP_SECONDS + 1)
+    assert answer == "wait" and wait >= guard.MIN_GAP_SECONDS - 1
+
+
 def test_plafond_quotidien(guard, monkeypatch):
     monkeypatch.setattr(guard, "DAILY_LIMIT", 2)
     t = 1_000_000.0

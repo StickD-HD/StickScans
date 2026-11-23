@@ -133,7 +133,8 @@ def plan_next(series: dict, ok: bool, now: datetime | None = None, missing: bool
     database.set_next_check(series["id"], now + schedule.jittered(hours), reason)
 
 
-def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: float | None = None) -> dict:
+def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: float | None = None,
+           interactive: bool = False) -> dict:
     """Vérifie une série, mesure la durée, l'enregistre dans le journal (base + fichier) et planifie la suivante.
 
     use_cache : réutiliser la copie récente d'une autre instance au lieu de solliciter le site.
@@ -157,7 +158,7 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: 
                 source = "cache"
         final_url = series["url"]
         if html is None:
-            html, final_url = fetch_page(series["url"], max_wait=max_wait)
+            html, final_url = fetch_page(series["url"], max_wait=max_wait, interactive=interactive)
         try:
             parsed = parse_series_page(html)
         except Exception:
@@ -165,7 +166,7 @@ def _check(series: dict, run_id: int | None, use_cache: bool = False, max_wait: 
                 raise
             # copie illisible : on retente avec la vraie page du site
             source = "site"
-            html, final_url = fetch_page(series["url"], max_wait=max_wait)
+            html, final_url = fetch_page(series["url"], max_wait=max_wait, interactive=interactive)
             parsed = parse_series_page(html)
         moved_to = _follow_redirect(series, final_url)
         title = parsed.get("title") or title
@@ -224,7 +225,7 @@ def change_series_url(series: dict, url: str) -> dict:
     gardant chapitres lus et historique (les chapitres sont reconnus par leur numéro). Renvoie les nouveaux chapitres.
     Erreurs : FetchError (page illisible ou introuvable), ValueError (pas une fiche), sqlite3.IntegrityError (adresse
     déjà suivie)."""
-    html, final_url = fetch_page(url)
+    html, final_url = fetch_page(url, interactive=True)
     parsed = parse_series_page(html)
     if not parsed.get("title"):
         raise ValueError("Cette page n'est pas une fiche de série")
@@ -258,7 +259,7 @@ def _check_one(series: dict) -> dict:
     run_id = database.start_check_run("série", 1)
     started = time.monotonic()
     checks_log.info("=== Vérification [série] : %s ===", series.get("title") or series["url"])
-    result = _check(series, run_id)
+    result = _check(series, run_id, interactive=True)  # bouton « Actualiser » : passe devant les vérifications auto
     database.finish_check_run(run_id, time.monotonic() - started,
                               status="interrompue" if result["blocked"] else "terminée")
     updated = database.get_series_by_id(series["id"])
@@ -410,5 +411,5 @@ def check_all_series(trigger: str = "manuel") -> None:
 
 
 def fetch_and_parse_new_url(url: str) -> dict:
-    html = fetch_html(url)
+    html = fetch_html(url, interactive=True)  # ajout d'une série : passe devant les vérifications automatiques
     return parse_series_page(html)
