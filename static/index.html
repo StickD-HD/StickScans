@@ -356,66 +356,6 @@
             <select id="backup-keep"><option value="3">3</option><option value="7">7</option><option value="14">14</option><option value="30">30</option></select>
           </label>
         </section>
-        <section class="settings-section" id="gdrive-section">
-          <h2>Google Drive</h2>
-          <p class="section-label">Chaque nuit, une copie de ta base est aussi envoyée sur ton Google Drive, dans un dossier « StickScans ». L'appli n'a accès qu'aux fichiers qu'elle crée, rien d'autre sur ton Drive. Les copies ne contiennent ni ton jeton AniList ni l'accès Google.</p>
-
-          <!-- 1. Identifiant Google pas encore renseigné -->
-          <div id="gdrive-setup" class="hidden">
-            <details id="gdrive-help" class="setup-help" open>
-              <summary>Créer ton identifiant Google (une seule fois, ~10 min)</summary>
-              <ol>
-                <li>Crée un projet (nom au choix, ex. StickScans) sur <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">console.cloud.google.com</a>.</li>
-                <li>Active l'API Google Drive : <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener">page de l'API Drive</a> › « Activer ».</li>
-                <li>Ouvre <a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">Google Auth Platform</a> › « Commencer » : un nom d'appli, ton e-mail, audience <em>Externe</em>.</li>
-                <li>Dans <a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener">Audience</a>, clique sur « Publier l'application » (sinon Google coupe l'accès au bout de 7 jours). Aucune validation n'est demandée pour l'accès limité utilisé ici.</li>
-                <li>Dans <a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noopener">Clients</a> › « Créer un client », type <em>TV et appareils à entrée limitée</em>, puis recopie l'ID client et le code secret ci-dessous.</li>
-              </ol>
-            </details>
-            <label>ID client
-              <input id="gdrive-client-id" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="….apps.googleusercontent.com">
-            </label>
-            <label>Code secret du client
-              <input id="gdrive-client-secret" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="GOCSPX-…">
-            </label>
-            <div class="settings-actions">
-              <button id="gdrive-client-save" type="button" class="primary-btn">Enregistrer</button>
-              <button id="gdrive-client-cancel" type="button" class="hidden">Annuler</button>
-            </div>
-          </div>
-
-          <!-- 2. Identifiant renseigné : connexion au compte -->
-          <div id="gdrive-connect" class="hidden">
-            <div id="gdrive-code-box" class="gdrive-code-box hidden">
-              <span>Sur <a id="gdrive-verify-link" target="_blank" rel="noopener">google.com/device</a>, saisis ce code :</span>
-              <strong id="gdrive-user-code"></strong>
-              <button id="gdrive-copy-code" type="button" class="mini-btn">Copier le code</button>
-              <small id="gdrive-wait">En attente de ta validation…</small>
-            </div>
-            <div class="settings-actions">
-              <button id="gdrive-connect-btn" type="button" class="primary-btn">Connecter Google Drive</button>
-              <button id="gdrive-edit-client" type="button">Changer l'identifiant</button>
-            </div>
-          </div>
-
-          <!-- 3. Connecté -->
-          <div id="gdrive-connected" class="hidden">
-            <div class="gdrive-account">
-              <strong id="gdrive-email">Google Drive connecté</strong>
-              <span id="gdrive-last" class="section-label"></span>
-            </div>
-            <label class="switch-row"><span><strong>Copies gardées sur le Drive</strong><small>Les plus anciennes sont supprimées</small></span>
-              <select id="gdrive-keep"><option value="3">3</option><option value="7">7</option><option value="14">14</option><option value="30">30</option></select>
-            </label>
-            <button id="gdrive-upload-btn" type="button" class="primary-btn">Envoyer une copie maintenant</button>
-            <ul id="gdrive-list" class="backup-list"></ul>
-            <div class="settings-actions">
-              <button id="gdrive-disconnect-btn" type="button" class="danger-btn">Déconnecter Google Drive</button>
-            </div>
-          </div>
-          <p id="gdrive-error" class="error hidden"></p>
-          <p id="gdrive-msg" class="section-label"></p>
-        </section>
         <section class="settings-section">
           <h2>Mes sauvegardes</h2>
           <button id="backup-now-btn" type="button" class="primary-btn">Sauvegarder maintenant</button>

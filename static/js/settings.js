@@ -15,7 +15,7 @@ const SETTINGS_PAGE_LOADERS = {
   updates: () => loadUpdateSettings(),
   anilist: () => loadSettingsAnilistStatus(),
   storage: () => loadStorage(),
-  backup: () => { loadBackups(); loadGdrive(); },
+  backup: () => loadBackups(),
 };
 
 // name = null : retour à la liste des rubriques.

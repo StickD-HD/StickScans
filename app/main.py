@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 
-from . import anilist, auth, database, gdrive
+from . import anilist, auth, database
 from . import scraper as scraper_module
 from .parse_series import number_to_float
 from . import backup as backup_files
@@ -86,9 +86,6 @@ def scheduled_backup(overwrite: bool = True):
     cfg = _backup_settings()
     if cfg["enabled"]:
         run_backup(overwrite=overwrite, keep=cfg["keep"])
-    # Copie sur Google Drive si connecté (au plus une toutes les 20 h), sans faire attendre le démarrage.
-    if gdrive.is_connected():
-        threading.Thread(target=gdrive.upload_if_due, name="envoi-drive", daemon=True).start()
 
 
 @asynccontextmanager
@@ -242,15 +239,6 @@ class BulkSeriesRequest(BaseModel):
 
 class BulkIdsRequest(BaseModel):
     series_ids: list[int] = Field(max_length=1000)
-
-
-class GdriveClientRequest(BaseModel):
-    client_id: str
-    client_secret: str
-
-
-class GdriveSettingsRequest(BaseModel):
-    keep: int = Field(ge=1, le=30)
 
 
 class CategoryRequest(BaseModel):
@@ -1002,81 +990,6 @@ def bulk_series_categories(payload: BulkIdsRequest):
         members = database.get_category_series_ids(c["id"])
         result.append({"id": c["id"], "name": c["name"], "count": len(ids & members), "total": len(ids)})
     return result
-
-
-# --- Google Drive ---
-
-def _gdrive_call(fn, *args):
-    try:
-        return fn(*args)
-    except gdrive.DriveError as e:
-        raise HTTPException(400, str(e))
-
-
-@app.get("/api/gdrive")
-def gdrive_status():
-    return gdrive.get_status()
-
-
-@app.post("/api/gdrive/client")
-def gdrive_client(payload: GdriveClientRequest):
-    _gdrive_call(gdrive.save_client, payload.client_id, payload.client_secret)
-    return gdrive.get_status()
-
-
-@app.put("/api/gdrive/settings")
-def gdrive_settings(payload: GdriveSettingsRequest):
-    gdrive.set_keep(payload.keep)
-    return gdrive.get_status()
-
-
-@app.post("/api/gdrive/connect")
-def gdrive_connect():
-    return _gdrive_call(gdrive.start_connect)
-
-
-@app.post("/api/gdrive/poll")
-def gdrive_poll():
-    return _gdrive_call(gdrive.poll_connect)
-
-
-@app.delete("/api/gdrive")
-def gdrive_disconnect():
-    gdrive.disconnect()
-    return gdrive.get_status()
-
-
-@app.post("/api/gdrive/upload")
-def gdrive_upload():
-    result = _gdrive_call(gdrive.upload_now)
-    return {**gdrive.get_status(), "uploaded": result}
-
-
-@app.get("/api/gdrive/files")
-def gdrive_files():
-    return _gdrive_call(gdrive.list_files)
-
-
-@app.post("/api/gdrive/files/{file_id}/restore")
-def gdrive_restore(file_id: str):
-    """Remplace la base par une copie du Drive (copie de sécurité de la base actuelle avant). Les accès AniList et
-    Google, absents des copies envoyées, sont gardés tels qu'ils sont maintenant."""
-    tmp = database.DB_PATH.with_name(database.DB_PATH.name + ".drive.tmp")
-    try:
-        _gdrive_call(gdrive.download, file_id, tmp)
-        kept = gdrive.preserved_settings()
-        with _exclusive():
-            safe = replace_database(tmp, label="avant-restauration")
-            database.init_db()
-            gdrive.restore_settings(kept)
-            auth.forget_generation_cache()
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except FileNotFoundError:
-        raise HTTPException(404, "Copie introuvable sur le Drive")
-    finally:
-        tmp.unlink(missing_ok=True)
-    return {"status": "ok", "backup": safe.name if safe else None}
 
 
 @app.delete("/api/series/{series_id}")
