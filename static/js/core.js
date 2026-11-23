@@ -95,6 +95,10 @@ function dropAllLayers() {
   history.go(-n);
 }
 
+// Le défilement est géré par l'appli (retour d'une fiche à l'endroit exact) : le navigateur ne doit pas le
+// remettre à sa façon en revenant en arrière dans l'historique.
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
 // --- Mouvement : feuilles du bas qui montent et redescendent, écrans qui apparaissent en fondu ---
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const SHEET_CLOSE_MS = 200;
@@ -135,8 +139,10 @@ function closeModal(el) {
 }
 
 // Rejoue l'animation d'entrée d'un écran (onglet, fiche, page de Réglages).
+// Désactivé : les écrans s'affichent instantanément (gardé pour ne pas toucher aux appels).
+const SCREEN_ANIMATIONS = false;
 function playEnter(el, cls = "view-enter") {
-  if (!el || reduceMotion.matches) return;
+  if (!SCREEN_ANIMATIONS || !el || reduceMotion.matches) return;
   el.classList.remove("view-enter", "view-push");
   void el.offsetWidth; // redémarre l'animation
   el.classList.add(cls);

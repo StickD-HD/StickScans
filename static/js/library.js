@@ -24,6 +24,8 @@ const filterBadge = document.getElementById("filter-badge");
 const refreshAllLabel = document.getElementById("refresh-all-label");
 const randomSeriesBtn = document.getElementById("random-series-btn");
 let libraryShown = []; // séries actuellement affichées dans la bibliothèque (donc déjà filtrées)
+let libraryRequest = 0;
+let lastLibraryText = null;
 let librarySelecting = false; // mode sélection de séries (voir library-select.js)
 let librarySelected = new Set();
 const updatesRefreshBtn = document.getElementById("updates-refresh-btn");
@@ -154,8 +156,14 @@ async function loadLibrary() {
   if (!grid.querySelector(".card")) {
     grid.innerHTML = '<div class="card skeleton"><div class="cover-wrap"></div><div class="info"><span></span><span></span></div></div>'.repeat(9);
   }
+  const request = ++libraryRequest;
   const res = await fetch(`/api/series?${params}`);
-  const series = await res.json();
+  const text = await res.text();
+  if (request !== libraryRequest) return; // une demande plus récente (frappe dans la recherche…) a pris le relais
+  // Rien n'a changé depuis le dernier affichage (retour d'une fiche, onglet rouvert) : on ne redessine rien.
+  if (text === lastLibraryText && grid.querySelector(".card:not(.skeleton)")) return;
+  lastLibraryText = text;
+  const series = JSON.parse(text);
   libraryShown = series;
 
   grid.innerHTML = "";

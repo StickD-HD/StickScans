@@ -215,3 +215,10 @@ def test_deconnexion(google):
     connect()
     gdrive.disconnect()
     assert not gdrive.is_connected() and gdrive.is_configured()
+
+
+def test_page_avec_fichiers_versionnes():
+    html = main._versioned_page("index.html").body.decode()
+    assert f'/static/style.css?v={main.ASSET_VERSION}"' in html
+    assert f'/static/js/core.js?v={main.ASSET_VERSION}"' in html
+    assert "/static/fonts/manrope-latin-wght-normal.woff2\"" in html  # police : adresse inchangée (appelée par le CSS)

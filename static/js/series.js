@@ -73,7 +73,17 @@ async function openChaptersView(seriesId) {
   currentAnilistProgress = null;
   anilistAlignBanner.classList.add("hidden");
   setSelectionMode(false);
-  clearDetailUI(); // jamais l'ancienne fiche le temps que la nouvelle arrive
+  // Affichage immédiat : la dernière version connue de la fiche (déjà ouverte), sinon ce que la bibliothèque sait
+  // déjà de la série ; jamais l'ancienne fiche. Les données à jour arrivent ensuite et ne redessinent que si besoin.
+  const cached = detailCache.get(seriesId);
+  const known = libraryShown.find((x) => x.id === seriesId);
+  if (cached) {
+    renderSeriesDetail(cached.series);
+    renderChapters(cached.chapters);
+  } else {
+    clearDetailUI();
+    if (known) renderSeriesDetail({ genres: [], ...known });
+  }
   if (chaptersView.classList.contains("hidden")) {
     viewBeforeDetail = lastTopView;
     scrollBeforeDetail = window.scrollY;
@@ -83,9 +93,34 @@ async function openChaptersView(seriesId) {
     window.scrollTo(0, 0);
     pushLayer({ detail: true, view: chaptersView, close: closeDetailUI });
   }
-  await loadSeriesDetail();
-  await loadChapters();
+  // Les deux demandes partent en même temps.
+  const seriesP = fetch(`/api/series/${seriesId}`).then((r) => r.json());
+  const chaptersP = fetch(`/api/series/${seriesId}/chapters`).then((r) => r.json());
+  await loadSeriesDetail(seriesP);
+  await loadChapters(chaptersP);
   syncAnilist(); // en arrière-plan : récupère ce qui a changé sur AniList depuis la dernière fois
+}
+
+// Fond de la fiche : la couverture dessinée dans une toute petite image (20 × 30) que le navigateur agrandit ;
+// l'agrandissement lisse donne le flou, calculé une seule fois, au lieu d'un filtre de flou recalculé en continu.
+const backdropCanvas = document.createElement("canvas");
+backdropCanvas.width = 20;
+backdropCanvas.height = 30;
+document.getElementById("detail-backdrop").appendChild(backdropCanvas);
+let backdropUrl = null;
+function setDetailBackdrop(url) {
+  if (url === backdropUrl) return;
+  backdropUrl = url;
+  const ctx = backdropCanvas.getContext("2d");
+  ctx.clearRect(0, 0, 20, 30);
+  if (!url) return;
+  const img = new Image();
+  img.onload = () => {
+    if (backdropUrl !== url) return;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, 20, 30);
+  };
+  img.src = url;
 }
 
 const BLANK_IMG = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
@@ -95,7 +130,7 @@ function clearDetailUI() {
   chaptersView.classList.add("detail-loading");
   detailCover.classList.remove("loaded");
   detailCover.src = BLANK_IMG;
-  document.getElementById("detail-backdrop").style.backgroundImage = "";
+  setDetailBackdrop(null);
   detailTitle.textContent = "";
   detailMeta.classList.add("hidden");
   [detailType, detailTeam, detailProgress, detailRemaining, detailReading, detailNextCheck].forEach((el) => el.classList.add("hidden"));
@@ -112,16 +147,25 @@ function clearDetailUI() {
   anilistLinked.classList.add("hidden");
 }
 
-async function loadSeriesDetail() {
+const detailCache = new Map(); // id de série → { series, chapters } : dernière version affichée
+let lastMinutesPerChapter = 5;
+
+async function loadSeriesDetail(prefetched = null) {
   const seriesId = currentSeriesId;
-  const res = await fetch(`/api/series/${seriesId}`);
-  const s = await res.json();
+  const s = await (prefetched || fetch(`/api/series/${seriesId}`).then((r) => r.json()));
   if (seriesId !== currentSeriesId) return; // une autre fiche a été ouverte entre-temps
+  const entry = detailCache.get(seriesId) || {};
+  const same = entry.series && JSON.stringify(entry.series) === JSON.stringify(s);
+  detailCache.set(seriesId, { ...entry, series: s });
+  if (s.minutes_per_chapter) lastMinutesPerChapter = s.minutes_per_chapter;
+  if (!(same && prefetched) || chaptersView.classList.contains("detail-loading")) renderSeriesDetail(s);
+}
+
+function renderSeriesDetail(s) {
   chaptersView.classList.remove("detail-loading");
   if (detailCover.getAttribute("src") !== (s.cover_url || "")) detailCover.classList.remove("loaded");
   detailCover.src = s.cover_url || "";
-  // Fond de la fiche : la couverture, très floutée, qui se fond dans le fond de l'appli.
-  document.getElementById("detail-backdrop").style.backgroundImage = s.cover_url ? `url(${JSON.stringify(s.cover_url)})` : "";
+  setDetailBackdrop(s.cover_url);
   detailTitle.textContent = s.title || "Sans titre";
 
   detailMeta.innerHTML = s.status
@@ -142,7 +186,7 @@ async function loadSeriesDetail() {
   setInfoLine(detailTeam, "Trad.", team, s.main_team ? `Team principale (dernier chapitre) · toutes : ${s.team || s.main_team}` : s.team);
   setInfoLine(detailType, "Type", [s.category, s.year].filter(Boolean).join(" · "));
   // Progression et temps de lecture estimés, à raison de minutes_per_chapter minutes par chapitre.
-  const mpc = s.minutes_per_chapter || 5;
+  const mpc = s.minutes_per_chapter || lastMinutesPerChapter;
   const total = s.total_chapters || 0;
   const unread = s.unread_count || 0;
   const readCount = Math.max(0, total - unread);
@@ -210,11 +254,18 @@ function updateContinueReadingButton() {
   };
 }
 
-async function loadChapters() {
+async function loadChapters(prefetched = null) {
   const seriesId = currentSeriesId;
-  const res = await fetch(`/api/series/${seriesId}/chapters`);
-  const chapters = await res.json();
+  const chapters = await (prefetched || fetch(`/api/series/${seriesId}/chapters`).then((r) => r.json()));
   if (seriesId !== currentSeriesId) return; // réponse d'une fiche qu'on a quittée
+  const entry = detailCache.get(seriesId) || {};
+  const same = entry.chapters && JSON.stringify(entry.chapters) === JSON.stringify(chapters) && chaptersList.children.length;
+  detailCache.set(seriesId, { ...entry, chapters });
+  if (same && prefetched) return; // ouverture : déjà affiché depuis le cache, rien n'a changé
+  renderChapters(chapters);
+}
+
+function renderChapters(chapters) {
   currentChapters = chapters;
   updateContinueReadingButton();
   updateAlignBanner();
@@ -407,8 +458,11 @@ function closeDetailUI() {
   chaptersView.classList.add("hidden");
   goToTopView(viewBeforeDetail);
   currentSeriesId = null;
+  // Retour instantané : la liste d'avant est toujours là, on reprend tout de suite où on était ; la mise à jour
+  // se fait ensuite en arrière-plan (et ne redessine que si quelque chose a changé).
+  window.scrollTo(0, scrollBeforeDetail);
   const reload = { "library-view": loadLibrary, "updates-view": loadUpdates, "history-view": loadHistory }[viewBeforeDetail];
-  Promise.resolve(reload && reload()).then(() => window.scrollTo(0, scrollBeforeDetail));
+  if (reload) reload();
 }
 
 function backToLibrary() {

@@ -14,7 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
@@ -35,6 +35,32 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("manhwa-tracker")
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
+
+
+def _asset_version() -> str:
+    """Empreinte des fichiers de l'interface : change dès qu'un fichier change (donc à chaque mise à jour)."""
+    import hashlib
+    h = hashlib.sha1()
+    for f in sorted(STATIC_DIR.rglob("*")):
+        if f.is_file():
+            st = f.stat()
+            h.update(f"{f.relative_to(STATIC_DIR)}:{st.st_size}:{st.st_mtime_ns}".encode())
+    return h.hexdigest()[:10]
+
+
+ASSET_VERSION = _asset_version()
+_versioned_pages: dict[str, str] = {}
+
+
+def _versioned_page(name: str) -> HTMLResponse:
+    """La page avec ses scripts, styles et icônes appelés en ?v=<version> : au lancement de l'appli, seule la page
+    est redemandée au serveur, tout le reste vient directement du cache du navigateur (aucun aller-retour)."""
+    if name not in _versioned_pages:
+        import re
+        html = (STATIC_DIR / name).read_text(encoding="utf-8")
+        _versioned_pages[name] = re.sub(
+            r'((?:src|href)=")(/static/(?!fonts/)[^"?#]+)"', rf'\1\2?v={ASSET_VERSION}"', html)
+    return HTMLResponse(_versioned_pages[name])
 # Écrit par outils/deploy.sh dans le dossier de l'instance : « commit|date|message » de la version qui tourne.
 VERSION_FILE = Path(__file__).parent.parent / "VERSION"
 
@@ -107,6 +133,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Stickscans", lifespan=lifespan)
+# Réponses compressées (listes de séries, chapitres, scripts, styles) : 4 à 8 fois moins de données à faire passer
+# par le tunnel, donc des écrans qui s'affichent plus vite sur le téléphone.
+from starlette.middleware.gzip import GZipMiddleware  # noqa: E402
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 @app.middleware("http")
@@ -162,7 +192,12 @@ async def never_serve_stale_pages(request: Request, call_next):
     Sans ça, un cache intermédiaire (Cloudflare, par exemple) continue de servir l'ancienne version
     de app.js / style.css pendant des heures après une mise à jour."""
     response = await call_next(request)
-    if not request.url.path.startswith("/api/"):
+    path = request.url.path
+    if path.startswith("/static/") and request.query_params.get("v") == ASSET_VERSION:
+        # Fichier appelé avec la version en cours (?v=…) : son contenu ne changera jamais sous cette adresse, le
+        # navigateur le garde sans plus rien demander. Une mise à jour change la version, donc l'adresse.
+        response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+    elif not path.startswith("/api/"):
         response.headers["Cache-Control"] = "private, no-cache"
     return response
 
@@ -249,7 +284,7 @@ class AnilistUpdateRequest(BaseModel):
 def login_page(request: Request):
     if not auth.is_enabled() or auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)):
         return RedirectResponse("/", status_code=303)
-    return FileResponse(STATIC_DIR / "login.html")
+    return _versioned_page("login.html")
 
 
 @app.post("/api/auth/login")
@@ -1057,7 +1092,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return _versioned_page("index.html")
 
 
 @app.get("/manifest.json")

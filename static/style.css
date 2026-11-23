@@ -1126,7 +1126,7 @@ button:active:not(:disabled) { opacity: 1; transform: scale(0.97); }
 .card img { box-shadow: var(--shadow-1); }
 .cover-wrap, .update-row img, .rv-cover { background: var(--surface-high); }
 @keyframes shimmer { 0% { background-position: -160px 0; } 100% { background-position: 160px 0; } }
-.cover-wrap:has(img:not(.loaded)), .skeleton .cover-wrap, .skeleton .info span {
+.skeleton .cover-wrap, .skeleton .info span {
   background: linear-gradient(90deg, var(--surface) 0%, var(--surface-high) 50%, var(--surface) 100%);
   background-size: 320px 100%; animation: shimmer 1.3s linear infinite;
 }
@@ -1222,3 +1222,32 @@ header .icon-btn.active { background: var(--accent-soft); border-color: var(--ac
    ses boutons Retour et ⋮ flottants pendant le défilement. */
 header { position: relative; }
 #chapters-view header { position: sticky; }
+
+/* =====================================================================================================
+   Fluidité : on retire les effets coûteux pour le téléphone (flous en temps réel, ombres sur chaque image,
+   animations d'écran) ; les écrans s'affichent instantanément, seules les feuilles gardent un glissé court.
+   ===================================================================================================== */
+*, *::before, *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+#main-nav { background: rgba(10, 15, 27, 0.98); }
+:is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal) { background: rgba(3, 6, 12, 0.72); }
+#chapters-toolbar, #library-toolbar { background: var(--surface-high); }
+.toast { background: var(--surface-high); }
+#chapters-view header > button, #chapters-view header .menu-wrap > button { background: var(--surface-high); border-color: var(--border); }
+.view-enter, .view-push { animation: none !important; }
+:is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal):not(.hidden) > :first-child { animation-duration: 0.2s; }
+:is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal).closing,
+:is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal).closing > :first-child { animation-duration: 0.14s; }
+#chapters-toolbar:not(.hidden), #library-toolbar:not(.hidden) { animation-duration: 0.18s; }
+/* Images : affichées dès qu'elles arrivent, sans fondu ni fond animé ; pas d'ombre calculée sur chacune */
+.cover-wrap img, .update-row img, #detail-cover { opacity: 1 !important; transition: none; }
+.card img, .update-row img { box-shadow: none; }
+.badge { box-shadow: none; }
+.card .cover-wrap { contain: layout paint; }
+/* Grandes listes : le navigateur ne dessine que ce qui est à l'écran */
+#grid .card, .update-row, #chapters-list .chapter-row { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+.update-row { contain-intrinsic-size: auto 72px; }
+#chapters-list .chapter-row { contain-intrinsic-size: auto 46px; }
+.grid.list .card { contain-intrinsic-size: auto 90px; }
+/* Fond de la fiche : une toute petite image agrandie (flou naturel, calculé une fois) au lieu d'un flou en direct */
+#detail-backdrop { filter: none; transform: none; opacity: 0.42; background: none !important; overflow: hidden; }
+#detail-backdrop canvas { width: 100%; height: 100%; display: block; }
