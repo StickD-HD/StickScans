@@ -383,7 +383,14 @@ def _apply_display_cover(series: dict) -> dict:
     à la main (cover_locked)."""
     if series.get("anilist_cover_url") and not series.get("cover_locked"):
         series["cover_url"] = series["anilist_cover_url"]
+    series["cover_url"] = _local_cover(series.get("cover_url"))
     return series
+
+
+def _local_cover(url):
+    """Couverture servie par le serveur (petite copie) quand elle est en cache, sinon l'adresse d'origine."""
+    from . import covers
+    return covers.local_url(url)
 
 
 ANILIST_STATUSES = ("CURRENT", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REPEATING")
@@ -734,7 +741,7 @@ def get_recent_updates(limit: int = 100, offset: int = 0) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT c.id AS chapter_id, c.number, c.url, c.discovered_at,
+            SELECT c.id AS chapter_id, c.number, c.number_float, c.url, c.discovered_at,
                    s.id AS series_id, s.title AS series_title, CASE WHEN s.cover_locked = 0 AND s.anilist_cover_url IS NOT NULL THEN s.anilist_cover_url ELSE s.cover_url END AS series_cover
             FROM chapters c
             JOIN series s ON s.id = c.series_id
@@ -744,7 +751,7 @@ def get_recent_updates(limit: int = 100, offset: int = 0) -> list[dict]:
             """,
             (limit, offset),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [{**dict(r), "series_cover": _local_cover(r["series_cover"])} for r in rows]
 
 
 def get_reading_history(limit: int = 200, offset: int = 0) -> list[dict]:
@@ -761,7 +768,7 @@ def get_reading_history(limit: int = 200, offset: int = 0) -> list[dict]:
             """,
             (limit, offset),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [{**dict(r), "series_cover": _local_cover(r["series_cover"])} for r in rows]
 
 
 def remove_from_history(chapter_ids: list[int]):
@@ -868,7 +875,7 @@ def get_reading_summary(period: str = "week", tz_offset_minutes: int = 0, minute
         "series_count": len(rows),
         "since": since,
         "series": [
-            {"series_id": r["id"], "title": r["title"] or r["url"], "cover_url": r["cover_url"],
+            {"series_id": r["id"], "title": r["title"] or r["url"], "cover_url": _local_cover(r["cover_url"]),
              "count": r["n"], "minutes": r["n"] * mpc}
             for r in rows[:limit]
         ],

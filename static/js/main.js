@@ -7,6 +7,12 @@ async function init() {
   const sharedText = [shared.get("url"), shared.get("text"), shared.get("title")].filter(Boolean).join("\n");
   history.replaceState(null, "", location.pathname);
 
+  // Tout de suite : la dernière bibliothèque affichée sur cet appareil (même sans réseau), en attendant la vraie.
+  try {
+    const last = localStorage.getItem(LIBRARY_CACHE_PREFIX + "last");
+    if (last) renderLibrary(last);
+  } catch (e) {}
+
   const saved = getSavedFilters();
   if (saved.sort) sortSelect.value = saved.sort;
   if (!sortSelect.value) sortSelect.value = "last_checked_at"; // tri enregistré qui n'existe plus
@@ -18,12 +24,11 @@ async function init() {
   if (saved.hideRead) hideReadCheckbox.checked = saved.hideRead;
   if (saved.categoryId) activeCategoryId = saved.categoryId;
 
-  await loadGenreSelect();
-  await loadStatuses();
+  // Les trois listes (genres, statuts, catégories) en même temps plutôt qu'à la suite ; sans réseau, on continue.
+  await Promise.allSettled([loadGenreSelect(), loadStatuses(), loadCategorySelect()]);
   if (saved.genre) genreSelect.value = saved.genre;
   if (saved.status) statusSelect.value = saved.status;
 
-  await loadCategorySelect();
   await loadLibrary();
 
   if ("serviceWorker" in navigator) {

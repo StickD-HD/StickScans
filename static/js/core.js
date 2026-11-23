@@ -6,10 +6,20 @@ const _originalFetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
   const res = await _originalFetch(...args);
   if (res.status === 401 && !String(args[0]).startsWith("/api/auth/")) {
+    clearOfflineData();
     location.href = "/login?next=" + encodeURIComponent(location.pathname + location.search);
   }
   return res;
 };
+
+// Données gardées sur l'appareil pour un lancement instantané (bibliothèque, page) : effacées à la déconnexion.
+const LIBRARY_CACHE_PREFIX = "stickscans_lib:";
+async function clearOfflineData() {
+  try {
+    Object.keys(localStorage).filter((k) => k.startsWith(LIBRARY_CACHE_PREFIX)).forEach((k) => localStorage.removeItem(k));
+  } catch (e) {}
+  try { if (window.caches) await caches.delete("stickscans-page"); } catch (e) {}
+}
 
 const authSection = document.getElementById("auth-section");
 const logoutBtn = document.getElementById("logout-btn");
@@ -28,6 +38,7 @@ if (logoutOthersBtn) {
 if (logoutBtn) {
   logoutBtn.addEventListener("click", async () => {
     await _originalFetch("/api/auth/logout", { method: "POST" });
+    await clearOfflineData();
     location.href = "/login";
   });
 }
@@ -138,20 +149,8 @@ function closeModal(el) {
   else hideSheet(el);
 }
 
-// Rejoue l'animation d'entrée d'un écran (onglet, fiche, page de Réglages).
-// Désactivé : les écrans s'affichent instantanément (gardé pour ne pas toucher aux appels).
-const SCREEN_ANIMATIONS = false;
-function playEnter(el, cls = "view-enter") {
-  if (!SCREEN_ANIMATIONS || !el || reduceMotion.matches) return;
-  el.classList.remove("view-enter", "view-push");
-  void el.offsetWidth; // redémarre l'animation
-  el.classList.add(cls);
-}
-document.addEventListener("animationend", (e) => {
-  if (e.target.classList && (e.animationName === "view-enter" || e.animationName === "view-push")) {
-    e.target.classList.remove("view-enter", "view-push");
-  }
-});
+// Les écrans s'affichent instantanément (plus d'animation d'entrée) : appel conservé, sans effet.
+function playEnter() {}
 
 // Poignée en haut de chaque feuille, et feuille qu'on tire vers le bas pour la fermer (depuis la poignée ou le
 // titre, ou n'importe où quand son contenu est en haut de son défilement).
@@ -506,3 +505,63 @@ document.addEventListener("keydown", (e) => {
 for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
   document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
 }
+
+// --- Tirer vers le bas (en haut de la bibliothèque, des nouveautés ou de l'historique) pour actualiser l'écran ---
+// Recharge seulement ce qui est affiché depuis le serveur : aucune vérification du site n'est lancée.
+const pullIndicator = document.createElement("div");
+pullIndicator.id = "pull-indicator";
+pullIndicator.setAttribute("aria-hidden", "true");
+pullIndicator.innerHTML = icon("refresh");
+document.body.appendChild(pullIndicator);
+const PULL_READY = 70;
+let pull = null;
+
+function pullRefreshTarget() {
+  if (layers.length || !chaptersView.classList.contains("hidden")) return null;
+  if (typeof librarySelecting !== "undefined" && librarySelecting) return null;
+  return { "library-view": () => loadLibrary(), "updates-view": () => loadUpdates(), "history-view": () => loadHistory() }[lastTopView] || null;
+}
+
+document.addEventListener("touchstart", (e) => {
+  pull = null;
+  if (e.touches.length !== 1 || window.scrollY > 0 || pullIndicator.classList.contains("refreshing")) return;
+  if (e.target.closest("input, textarea, select, .popover, #main-nav, .sheet-modal")) return;
+  const refresh = pullRefreshTarget();
+  if (!refresh) return;
+  pull = { y: e.touches[0].clientY, x: e.touches[0].clientX, refresh, distance: 0, active: false };
+}, { passive: true });
+
+document.addEventListener("touchmove", (e) => {
+  if (!pull) return;
+  const t = e.touches[0];
+  const dy = t.clientY - pull.y;
+  if (!pull.active) {
+    if (Math.abs(t.clientX - pull.x) > Math.abs(dy) || dy < 8 || window.scrollY > 0) {
+      if (Math.abs(t.clientX - pull.x) > 8 || dy < -8) pull = null;
+      return;
+    }
+    pull.active = true;
+    pullIndicator.classList.add("visible");
+  }
+  pull.distance = Math.max(0, Math.min(110, (dy - 8) * 0.55));
+  pullIndicator.style.transform = `translate(-50%, ${pull.distance}px) rotate(${pull.distance * 3.2}deg)`;
+  pullIndicator.classList.toggle("ready", pull.distance >= PULL_READY);
+}, { passive: true });
+
+document.addEventListener("touchend", async () => {
+  const p = pull;
+  pull = null;
+  if (!p || !p.active) return;
+  if (p.distance < PULL_READY) {
+    pullIndicator.classList.remove("visible", "ready");
+    pullIndicator.style.transform = "";
+    return;
+  }
+  pullIndicator.classList.add("refreshing");
+  pullIndicator.style.transform = `translate(-50%, ${PULL_READY}px)`;
+  const started = Date.now();
+  try { await p.refresh(); } catch (err) {}
+  await new Promise((r) => setTimeout(r, Math.max(0, 450 - (Date.now() - started))));
+  pullIndicator.classList.remove("visible", "ready", "refreshing");
+  pullIndicator.style.transform = "";
+}, { passive: true });

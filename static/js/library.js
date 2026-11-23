@@ -157,9 +157,34 @@ async function loadLibrary() {
     grid.innerHTML = '<div class="card skeleton"><div class="cover-wrap"></div><div class="info"><span></span><span></span></div></div>'.repeat(9);
   }
   const request = ++libraryRequest;
-  const res = await fetch(`/api/series?${params}`);
-  const text = await res.text();
+  // Lancement : la dernière bibliothèque connue (gardée sur l'appareil) s'affiche tout de suite, même sans réseau ;
+  // la version à jour la remplace dès qu'elle arrive, si elle est différente.
+  const cacheKey = LIBRARY_CACHE_PREFIX + params;
+  if (lastLibraryText === null) {
+    let saved = null;
+    try { saved = localStorage.getItem(cacheKey); } catch (e) {}
+    if (saved) renderLibrary(saved);
+  }
+  let text;
+  try {
+    const res = await fetch(`/api/series?${params}`);
+    if (!res.ok) return;
+    text = await res.text();
+  } catch (e) {
+    if (request === libraryRequest && lastLibraryText !== null) toast("Pas de réseau : bibliothèque affichée telle qu'à la dernière ouverture.");
+    return;
+  }
   if (request !== libraryRequest) return; // une demande plus récente (frappe dans la recherche…) a pris le relais
+  if (!searchInput.value.trim()) {
+    try {
+      localStorage.setItem(cacheKey, text); // (pas pour chaque recherche tapée)
+      localStorage.setItem(LIBRARY_CACHE_PREFIX + "last", text); // affichée au prochain lancement
+    } catch (e) {}
+  }
+  renderLibrary(text);
+}
+
+function renderLibrary(text) {
   // Rien n'a changé depuis le dernier affichage (retour d'une fiche, onglet rouvert) : on ne redessine rien.
   if (text === lastLibraryText && grid.querySelector(".card:not(.skeleton)")) return;
   lastLibraryText = text;

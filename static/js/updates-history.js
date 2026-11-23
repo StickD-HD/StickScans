@@ -100,14 +100,39 @@ async function loadUpdates() {
 
 const updatesPager = makePager("/api/updates", 100);
 
+// Chapitres d'une même série trouvés le même jour, à la suite dans la liste : une seule ligne
+// (« Chapitres 243 à 245 · 3 nouveaux · à 15h01 ») au lieu d'une par chapitre.
+function groupUpdates(items) {
+  const groups = [];
+  for (const item of items) {
+    const last = groups[groups.length - 1];
+    if (last && last.series_id === item.series_id && formatDateBucket(last.discovered_at) === formatDateBucket(item.discovered_at)) {
+      last.chapters.push(item);
+    } else {
+      groups.push({ series_id: item.series_id, series_title: item.series_title, series_cover: item.series_cover,
+        discovered_at: item.discovered_at, chapters: [item] });
+    }
+  }
+  return groups;
+}
+
+function updateGroupLabel(group) {
+  const time = formatTimeLabel(group.discovered_at);
+  if (group.chapters.length === 1) return `Chapitre ${escapeHtml(group.chapters[0].number)} · ${time}`;
+  const sorted = [...group.chapters].sort((a, b) => (a.number_float ?? parseFloat(a.number)) - (b.number_float ?? parseFloat(b.number)));
+  const first = escapeHtml(sorted[0].number);
+  const last = escapeHtml(sorted[sorted.length - 1].number);
+  return `Chapitres ${first} à ${last} · ${group.chapters.length} nouveaux · ${time}`;
+}
+
 function renderUpdates() {
   const container = document.getElementById("updates-list");
   renderGroupedList(
     container,
-    updatesPager.items,
+    groupUpdates(updatesPager.items),
     "discovered_at",
-    (item) => escapeHtml(item.series_title),
-    (item) => `Chapitre ${escapeHtml(item.number)} · ${formatTimeLabel(item.discovered_at)}`,
+    (group) => escapeHtml(group.series_title),
+    updateGroupLabel,
   );
   appendMoreButton(container, updatesPager, renderUpdates);
 }

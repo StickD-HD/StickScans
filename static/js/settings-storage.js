@@ -20,13 +20,15 @@ async function loadStorage() {
     return;
   }
   const db = info.database;
-  const known = db.bytes + info.backups.bytes + info.logs.bytes;
+  const coversInfo = info.covers || { files: 0, bytes: 0 };
+  const known = db.bytes + info.backups.bytes + info.logs.bytes + coversInfo.bytes;
   const other = Math.max(0, info.data.bytes - known);
   const cache = info.page_cache;
   const parts = [
     ["seg-db", "Base de données", `${plural(db.series, "série", "séries")} · ${plural(db.chapters, "chapitre", "chapitres")}`, db.bytes],
     ["seg-backup", "Sauvegardes", plural(info.backups.count, "copie", "copies"), info.backups.bytes],
     ["seg-logs", "Journaux", plural(info.logs.files, "fichier", "fichiers"), info.logs.bytes],
+    ["seg-covers", "Couvertures", plural(coversInfo.files, "image", "images"), coversInfo.bytes],
     ["seg-cache", "Cache des pages", cache.active ? plural(cache.files, "page", "pages") : "Désactivé", cache.bytes],
   ];
   if (other > 0) parts.push(["seg-other", "Autres fichiers", "", other]);

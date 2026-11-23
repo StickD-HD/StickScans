@@ -1,5 +1,5 @@
 # Lance les tests à chaque envoi sur GitHub (et sur les pull requests). En cas d'échec, GitHub prévient par mail.
-# Aucune requête vers scan-manga ni AniList : les tests n'utilisent que des pages enregistrées.
+# Aucune requête vers scan-manga ni AniList : les tests n'utilisent que des pages enregistrées et une base de test.
 name: Tests
 
 on:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  serveur:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -21,4 +21,19 @@ jobs:
           cache: pip
           cache-dependency-path: requirements*.txt
       - run: pip install -r requirements-dev.txt
-      - run: python -m pytest -q
+      - run: python -m pytest -q --ignore=tests/e2e
+
+  # Parcours de l'interface dans un vrai navigateur (tests/e2e) : bibliothèque, fiche, sélection, réglages…
+  interface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt playwright==1.65.2
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m pytest -q tests/e2e

@@ -35,25 +35,35 @@
   --radius-sm: 9px;
   --radius-pill: 999px;
   --nav-height: 62px;
+  --st-ongoing: #3DDC97;
+  --st-completed: #A78BFA;
+  --st-paused: #F5C451;
+  --st-dropped: #F0645C;
+  --st-other: #7C89AC;
+  --ease-out: cubic-bezier(0.2, 0.9, 0.3, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.22);
+  --shadow-2: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --glass: rgba(12, 18, 32, 0.78);
 }
 
 * { box-sizing: border-box; }
 
 html {
   height: 100%;
-  background: var(--bg); /* même couleur sous l'encoche et lors du rebond de défilement */
+  background: var(--bg); /* même couleur sous l'encoche et lors du rebond de défilement */ touch-action: manipulation;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
   min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: 'Manrope', -apple-system, system-ui, sans-serif;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px); -webkit-tap-highlight-color: transparent;
 }
 
 h1, h2 { font-family: 'Manrope', sans-serif; font-weight: 800; letter-spacing: -0.01em; }
@@ -67,8 +77,7 @@ button {
   padding: 10px 16px;
   font-size: 0.85rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  cursor: pointer; transition: transform 0.12s ease, opacity 0.12s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 button:active { opacity: 0.75; }
 button:disabled { opacity: 0.45; }
@@ -97,8 +106,6 @@ input, select, textarea {
   bottom: 0; left: 0; right: 0;
   display: flex;
   background: rgba(15, 22, 38, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   z-index: 30;
@@ -115,7 +122,7 @@ input, select, textarea {
   padding: 8px 4px 6px;
   color: var(--muted);
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 700; position: relative; transition: color 0.2s ease;
 }
 #main-nav .nav-btn svg { width: 22px; height: 22px; }
 #main-nav .nav-btn.active { color: var(--accent); }
@@ -134,7 +141,6 @@ input, select, textarea {
 }
 
 header {
-  position: sticky;
   top: 0;
   display: flex;
   justify-content: space-between;
@@ -143,10 +149,11 @@ header {
   /* L'en-tête englobe la zone sous l'encoche / la barre d'état et reste opaque, sans flou : rien ne défile
      visiblement derrière elle, et iOS n'a plus de bande à flouter au-dessus des boutons. */
   padding: calc(16px + env(safe-area-inset-top, 0px)) 18px 16px;
-  background: var(--bg);
   z-index: 10;
+  background: transparent !important;
+  box-shadow: none !important; pointer-events: none; position: relative;
 }
-header h1 { font-size: 1.2rem; margin: 0; }
+header h1 { margin: 0; font-size: 1.28rem; letter-spacing: -0.02em; }
 
 .header-actions { display: flex; align-items: center; gap: 8px; }
 #refresh-status-text, #updates-refresh-status { font-size: 0.7rem; color: var(--muted); }
@@ -269,7 +276,6 @@ main#library { padding: 0 18px; }
   background: var(--accent); color: #06101F;
   font-size: 0.66rem; font-weight: 800; min-width: 18px; text-align: center;
   padding: 3px 7px; border-radius: var(--radius-pill);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
 }
 .badge-error { background: var(--error) !important; color: #241100 !important; }
 
@@ -288,7 +294,6 @@ main#library { padding: 0 18px; }
 /* --- Modales --- */
 #category-modal, #filter-modal, #anilist-modal, #series-category-modal, #add-modal {
   position: fixed; inset: 0; background: rgba(4, 7, 14, 0.72);
-  backdrop-filter: blur(4px);
   display: flex; align-items: flex-end; justify-content: center; z-index: 50;
 }
 #category-modal-content, #filter-modal-content, #anilist-modal-content, #series-category-modal-content, #add-modal-content {
@@ -306,22 +311,22 @@ main#library { padding: 0 18px; }
 .new-category-row input { flex: 1; }
 
 /* --- Vue chapitres / fiche détaillée --- */
-#chapters-view header { justify-content: space-between; gap: 8px; }
+#chapters-view header { justify-content: space-between; gap: 8px; position: sticky; }
 #chapters-view header button { background: var(--surface-high); }
 
 #detail-panel { padding: 4px 18px 18px; }
-#detail-top { display: flex; gap: 16px; }
+#detail-top { display: flex; gap: 16px; --cover-w: 126px; }
 #detail-cover {
-  width: 126px; aspect-ratio: 3/4; object-fit: cover; object-position: top center;
-  border-radius: var(--radius-sm); background: var(--surface); flex-shrink: 0;
+  width: 126px; object-fit: cover;
+  border-radius: var(--radius-sm); background: var(--surface); flex-shrink: 0; height: auto; aspect-ratio: 2 / 3; object-position: center top;
 }
-#detail-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-#detail-info h1 { font-size: 1.15rem; margin: 0 0 2px; }
+#detail-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; height: calc(var(--cover-w) * 1.5); }
+#detail-info h1 { font-size: 1.15rem; margin: 0 0 2px; -webkit-box-orient: vertical; }
 
 #detail-meta { font-size: 0.78rem; color: var(--muted); }
 
 /* --- Rangée d'actions : AniList / Catégorie / Source --- */
-#detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+#detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #detail-actions button, #detail-actions .action-btn-link {
   flex: 1 1 auto; text-align: center; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-pill); font-weight: 600;
@@ -391,8 +396,11 @@ main#library { padding: 0 18px; }
 #chapters-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 22px 18px 10px; }
 #chapters-count { margin: 0; font-size: 0.95rem; font-weight: 600; letter-spacing: 0; color: var(--muted); }
 #chapters-count strong { margin-right: 5px; font-size: 1.55rem; font-weight: 800; color: var(--text); }
-#chapters-toolbar { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; }
-#chapters-toolbar button { padding: 8px 12px; background: var(--surface-high); font-size: 0.8rem; }
+#chapters-toolbar { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px;
+  position: fixed; z-index: 25; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px)); justify-content: space-between;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35); }
+#chapters-toolbar button { padding: 8px 12px; background: var(--surface-high); font-size: 0.8rem; white-space: nowrap; display: inline-flex; align-items: center; }
 
 #chapters-list { list-style: none; margin: 0; padding: 0 18px; }
 .chapter-row {
@@ -413,13 +421,12 @@ main#library { padding: 0 18px; }
 .date-bucket:first-child { margin-top: 4px; }
 .update-row {
   display: flex; align-items: center; gap: 12px; padding: 9px 0;
-  border-bottom: 1px solid var(--border); cursor: pointer;
+  border-bottom: 1px solid var(--border); cursor: pointer; contain-intrinsic-size: auto 72px;
 }
 .update-row:active { opacity: 0.7; }
 .update-row img { width: 42px; aspect-ratio: 2/3; object-fit: cover; border-radius: 6px; background: var(--surface); }
-.update-row span { font-size: 0.85rem; }
+.update-row span { font-size: 0.85rem; flex: 1; min-width: 0; }
 .update-time { display: block; margin-top: 3px; font-size: 0.74rem; color: var(--muted); }
-.update-row span { flex: 1; min-width: 0; }
 .history-remove-btn { background: none; border: none; color: var(--muted); font-size: 0.95rem; padding: 8px 10px; flex: none; }
 .history-remove-btn:active { color: var(--error); }
 .week-chart { flex-basis: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; }
@@ -496,9 +503,8 @@ main#library { padding: 0 18px; }
 #anilist-help a { color: var(--accent); }
 #anilist-help code { background: var(--surface-high); padding: 2px 6px; border-radius: 6px; font-size: 0.74rem; overflow-wrap: anywhere; }
 #anilist-help input { width: 100%; margin-top: 6px; }
-#anilist-authorize-link { display: inline-flex; padding: 8px 14px; margin-bottom: 4px; background: var(--accent2-soft); color: var(--accent2) !important; }
+#anilist-authorize-link { display: inline-flex; padding: 8px 14px; margin-bottom: 4px; background: var(--accent2-soft); color: var(--accent2) !important; border: 1px solid var(--accent2); border-radius: var(--radius-pill); text-decoration: none; font-weight: 600; }
 .action-btn-link.disabled { opacity: 0.4; pointer-events: none; }
-#anilist-authorize-link { border: 1px solid var(--accent2); border-radius: var(--radius-pill); text-decoration: none; font-weight: 600; }
 
 /* --- Retour par glissement : pas de rebond horizontal --- */
 html, body { overscroll-behavior-x: none; }
@@ -513,13 +519,6 @@ html, body { overscroll-behavior-x: none; }
 #anilist-align-text { flex: 1 1 200px; }
 
 /* Statuts de série */
-:root {
-  --st-ongoing: #3DDC97;
-  --st-completed: #A78BFA;
-  --st-paused: #F5C451;
-  --st-dropped: #F0645C;
-  --st-other: #7C89AC;
-}
 .status-pill {
   display: inline-block; margin-right: 8px; padding: 2px 10px; border: 1px solid currentColor;
   border-radius: var(--radius-pill); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.02em;
@@ -669,6 +668,7 @@ body.single-line-title .card .title { -webkit-line-clamp: 1; }
 .seg-backup { background: var(--accent2); }
 .seg-logs { background: #F5C451; }
 .seg-cache { background: #A78BFA; }
+.seg-covers { background: #F472B6; }
 .seg-other { background: var(--muted); }
 .info-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .info-list li { display: flex; align-items: center; gap: 10px; }
@@ -745,10 +745,8 @@ a.mini-btn {
 .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 .ico { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.2em; }
 
-/* ===== Reprise du frontend (même direction artistique) ===== */
-
 /* Menus : icône + texte alignés */
-.popover button, .popover a { display: flex; align-items: center; gap: 12px; }
+.popover button, .popover a { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
 .popover .ico { width: 18px; height: 18px; color: var(--muted); }
 .popover .danger-item .ico { color: var(--error); }
 
@@ -799,17 +797,14 @@ img.img-missing {
 .history-remove-btn .ico { width: 16px; height: 16px; }
 
 /* Mode sélection : barre fixée au-dessus de la navigation, toujours accessible */
-#chapters-toolbar {
-  position: fixed; z-index: 25; left: 50%; transform: translateX(-50%); width: min(100%, 980px);
-  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
-  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: nowrap;
+#chapters-toolbar { width: min(100%, 980px);
+  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
   padding: 10px 18px; background: var(--surface-high); border-top: 1px solid var(--border);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
 }
 #chapters-toolbar.hidden { display: none !important; }
 #selection-count { font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
 .toolbar-actions { display: flex; gap: 6px; }
-#chapters-toolbar button { padding: 8px 12px; font-size: 0.8rem; background: var(--surface); border-color: var(--border); }
+#chapters-toolbar button { padding: 8px 12px; font-size: 0.8rem; background: var(--surface); border-color: var(--border); gap: 5px; }
 #chapters-toolbar button.primary { background: var(--accent); border-color: var(--accent); color: #06101F; }
 #chapters-toolbar #select-cancel-btn { display: inline-flex; padding: 8px 10px; }
 #chapters-toolbar .ico { width: 16px; height: 16px; }
@@ -837,15 +832,13 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
   #detail-cover { width: 170px; }
   #detail-info h1 { font-size: 1.35rem; }
 }
-#chapters-toolbar button { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
-.popover button, .popover a { white-space: nowrap; }
 
 /* Fiche : couverture toujours au même format (2:3, comme dans la bibliothèque). Sans align-self, la couverture
    s'étirait à la hauteur du bloc d'informations : plus allongée avec un titre long. */
-#detail-cover { align-self: flex-start; height: auto; aspect-ratio: 2 / 3; object-position: center top; }
+#detail-cover { align-self: flex-start; width: var(--cover-w); }
 
 /* Fiche : AniList sur toute la largeur, puis « Dans la bibliothèque » à gauche et « Scan-Manga » à droite */
-#detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+#detail-actions { display: grid; gap: 8px; }
 #detail-actions #anilist-action-btn { grid-column: 1 / -1; order: 0; }
 #detail-actions #library-btn { order: 1; }
 #detail-actions #detail-source-btn { order: 2; }
@@ -881,33 +874,26 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
 /* En-tête de la bibliothèque : la vraie icône de l'appli (celle de l'écran d'accueil du téléphone) */
 img.brand-mark { display: block; width: 32px; height: 32px; padding: 0; background: none; border-radius: 22%; box-shadow: none; }
 
-/* Pas de zoom au double tap (le pincement et le zoom à l'entrée dans un champ sont bloqués par la balise viewport
-   et par core.js) */
-html { touch-action: manipulation; }
-
 /* Fiche : bloc d'informations à la hauteur exacte de la couverture (2:3), jamais plus haut */
-#detail-top { --cover-w: 126px; align-items: flex-start; }
-#detail-cover { width: var(--cover-w); }
+#detail-top { align-items: flex-start; }
 #detail-info {
   min-width: 0; max-height: calc(var(--cover-w) * 1.5); overflow: hidden;
-  display: flex; flex-direction: column; gap: 7px;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 4px;
 }
 #detail-info h1 {
   margin: 0; line-height: 1.25;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; overflow: hidden;
 }
-#detail-meta { margin: 0; }
+#detail-meta { margin: 0; font-size: 0.78rem; }
 #detail-meta:empty { display: none; }
 .info-line { font-size: 0.78rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .info-label { color: var(--muted); margin-right: 4px; }
 @media (min-width: 860px) { #detail-top { --cover-w: 170px; } }
 
 /* Fiche : le bloc prend toute la hauteur de la couverture, lignes réparties du haut au bas */
-#detail-info { height: calc(var(--cover-w) * 1.5); justify-content: space-between; gap: 4px; }
 .info-line.fit-hidden { display: none; }
 
 /* Fiche : l'état devient une ligne comme les autres (texte coloré avec pastille), et un peu d'air avant les boutons */
-#detail-meta { font-size: 0.78rem; }
 .status-text { background: none; font-weight: 600; }
 .status-text::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 5px; vertical-align: 1px; }
 #detail-actions { margin-top: 22px; }
@@ -948,7 +934,7 @@ body.library-selecting .card .badge-stack { display: none; }
 
 /* Feuilles d'actions groupées (même apparence que les autres feuilles du bas) */
 .sheet-modal {
-  position: fixed; inset: 0; background: rgba(4, 7, 14, 0.72); backdrop-filter: blur(4px);
+  position: fixed; inset: 0; background: rgba(4, 7, 14, 0.72);
   display: flex; align-items: flex-end; justify-content: center; z-index: 50;
 }
 .sheet-modal.hidden { display: none; }
@@ -984,7 +970,7 @@ body.library-selecting .card .badge-stack { display: none; }
 
 
 /* Liste des chapitres : plus de case à cocher ; état lu / non lu à droite, actions par appui long */
-#chapters-list .chapter-row { cursor: pointer; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+#chapters-list .chapter-row { cursor: pointer; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; transition: background 0.15s ease; border-radius: var(--radius-sm); contain-intrinsic-size: auto 46px; position: relative; overflow: hidden; }
 .chapter-state { flex: none; width: 18px; display: inline-flex; justify-content: center; margin-left: auto; }
 .chapter-tag + .chapter-state { margin-left: 8px; }
 .read-mark { color: var(--muted); }
@@ -1016,34 +1002,13 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
    - écrans qui apparaissent en fondu (onglets) ou glissent depuis la droite (fiche, pages de Réglages)
    - menus qui s'ouvrent depuis leur bouton, retours au toucher, couvertures en fondu, squelettes de chargement
    ===================================================================================================== */
-:root {
-  --ease-out: cubic-bezier(0.2, 0.9, 0.3, 1);
-  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.22);
-  --shadow-2: 0 18px 48px rgba(0, 0, 0, 0.5);
-  --glass: rgba(12, 18, 32, 0.78);
-}
-body { -webkit-tap-highlight-color: transparent; }
 ::selection { background: var(--accent-soft); color: var(--text); }
 @media (min-width: 860px) {
   * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 }
 
-/* --- Écrans --- */
-@keyframes view-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes view-push { from { opacity: 0.4; transform: translateX(28px); } to { opacity: 1; transform: none; } }
-.view-enter { animation: view-enter 0.22s var(--ease-out); }
-.view-push { animation: view-push 0.26s var(--ease-out); }
-
-/* --- En-têtes : une ombre discrète dès qu'on fait défiler --- */
-header { transition: box-shadow 0.2s ease; }
-body.scrolled header { box-shadow: 0 1px 0 var(--border), 0 10px 24px rgba(0, 0, 0, 0.28); }
-header h1 { font-size: 1.28rem; letter-spacing: -0.02em; }
-
 /* --- Barre de navigation : verre dépoli et pastille sous l'onglet actif --- */
-#main-nav { background: var(--glass); backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4); }
-#main-nav .nav-btn { position: relative; transition: color 0.2s ease; }
+#main-nav { background: var(--glass); }
 #main-nav .nav-btn::before {
   content: ""; position: absolute; top: 4px; left: 50%; width: 58px; height: 30px; margin-left: -29px;
   border-radius: var(--radius-pill); background: var(--accent-soft);
@@ -1056,7 +1021,6 @@ header h1 { font-size: 1.28rem; letter-spacing: -0.02em; }
 #main-nav .nav-btn svg { transition: transform 0.15s ease; }
 
 /* --- Boutons : léger enfoncement plutôt qu'un simple fondu --- */
-button { transition: transform 0.12s ease, opacity 0.12s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
 button:active:not(:disabled) { opacity: 1; transform: scale(0.97); }
 .popover button:active, .settings-row:active, .bulk-actions button:active { transform: scale(0.985); }
 .icon-btn:hover:not(:disabled), .mini-btn:hover:not(:disabled) { border-color: var(--border); }
@@ -1073,7 +1037,7 @@ button:active:not(:disabled) { opacity: 1; transform: scale(0.97); }
 
 /* --- Feuilles du bas --- */
 :is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal) {
-  background: rgba(3, 6, 12, 0.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  background: rgba(3, 6, 12, 0.62);
 }
 :is(.sheet-modal-content, #filter-modal-content, #add-modal-content, #anilist-modal-content, #series-category-modal-content) {
   border-radius: 24px 24px 0 0; box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45); overscroll-behavior: contain;
@@ -1104,27 +1068,21 @@ button:active:not(:disabled) { opacity: 1; transform: scale(0.97); }
 .card .cover-wrap { border-radius: var(--radius-sm); transition: transform 0.16s var(--ease-out); }
 .card:active { opacity: 1; }
 .card:active .cover-wrap { transform: scale(0.96); }
-.card img { box-shadow: var(--shadow-1); }
 .cover-wrap, .update-row img, .rv-cover { background: var(--surface-high); }
 @keyframes shimmer { 0% { background-position: -160px 0; } 100% { background-position: 160px 0; } }
 .skeleton .cover-wrap, .skeleton .info span {
   background: linear-gradient(90deg, var(--surface) 0%, var(--surface-high) 50%, var(--surface) 100%);
   background-size: 320px 100%; animation: shimmer 1.3s linear infinite;
 }
-.cover-wrap img, .update-row img { opacity: 0; transition: opacity 0.3s ease, filter 0.2s ease; }
-.cover-wrap img.loaded, .update-row img.loaded { opacity: 1; }
 .skeleton { pointer-events: none; }
 .skeleton .cover-wrap { aspect-ratio: 2 / 3; border-radius: var(--radius-sm); }
 .skeleton .info { gap: 6px; padding-top: 2px; }
 .skeleton .info span { display: block; height: 9px; border-radius: 5px; width: 85%; }
 .skeleton .info span + span { width: 40%; }
-.badge { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); }
 
 /* --- Listes (nouveautés, historique, chapitres) : retour au toucher --- */
 .update-row { border-radius: var(--radius-sm); transition: background 0.15s ease; margin: 0 -8px; padding-left: 8px; padding-right: 8px; }
 .update-row:active { opacity: 1; background: var(--surface); }
-.update-row img { box-shadow: var(--shadow-1); }
-#chapters-list .chapter-row { transition: background 0.15s ease; border-radius: var(--radius-sm); }
 #chapters-list .chapter-row:active { background: var(--surface); }
 .chapter-row.selected { background: var(--accent-soft); }
 .row-select-mark, .select-mark { transition: background 0.15s ease, border-color 0.15s ease, transform 0.2s var(--ease-spring); }
@@ -1134,21 +1092,20 @@ button:active:not(:disabled) { opacity: 1; transform: scale(0.97); }
 #detail-panel { position: relative; }
 #detail-panel > * { position: relative; }
 #detail-backdrop {
-  position: absolute; z-index: 0; left: -18px; right: -18px; top: -90px; height: 420px; pointer-events: none;
-  background-size: cover; background-position: center 20%;
-  filter: blur(42px) saturate(1.35); opacity: 0.3; transform: scale(1.15);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.6) 45%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.6) 45%, transparent 100%);
-  transition: background-image 0.3s ease;
+  position: absolute; z-index: 0; left: -18px; right: -18px; pointer-events: none;
+  background-size: cover; background-position: center 20%; opacity: 0.3;
+  transition: background-image 0.3s ease; top: calc(-220px - env(safe-area-inset-top, 0px)); height: calc(560px + env(safe-area-inset-top, 0px));
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0, 0, 0, 0.55) 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0, 0, 0, 0.55) 70%, transparent 100%); filter: none; transform: none; background: none !important;
 }
 #chapters-view { overflow-x: clip; }
 #detail-cover { box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); }
 
 /* --- Barres de sélection et messages : verre dépoli --- */
-#chapters-toolbar, #library-toolbar { background: rgba(23, 32, 56, 0.9); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+#chapters-toolbar, #library-toolbar { background: rgba(23, 32, 56, 0.9); }
 @keyframes bar-up { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 #chapters-toolbar:not(.hidden), #library-toolbar:not(.hidden) { animation: bar-up 0.26s var(--ease-out); }
-.toast { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(23, 32, 56, 0.94); }
+.toast { background: var(--surface-high); }
 
 /* --- Réglages --- */
 .settings-row { transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease; }
@@ -1157,19 +1114,9 @@ button:active:not(:disabled) { opacity: 1; transform: scale(0.97); }
 /* --- Moins d'animations si l'appareil le demande --- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; }
-  .cover-wrap img, .update-row img { opacity: 1; }
 }
-
-/* --- En-têtes en verre dépoli : le contenu (et le fond flouté de la fiche) passe dessous en transparence --- */
-header {
-  background: rgba(8, 13, 24, 0.7);
-  backdrop-filter: blur(18px) saturate(1.5); -webkit-backdrop-filter: blur(18px) saturate(1.5);
-}
-body.scrolled header { box-shadow: 0 1px 0 rgba(32, 43, 72, 0.7); }
 
 /* --- Fiche en cours de chargement : blocs qui pulsent à la place de l'ancienne fiche --- */
-#detail-cover { opacity: 0; transition: opacity 0.25s ease; }
-#detail-cover.loaded { opacity: 1; }
 .detail-loading #detail-cover, .detail-loading #detail-title, .detail-loading #detail-info::before, .detail-loading #detail-info::after {
   background: linear-gradient(90deg, #131C30 0%, #1E2A47 50%, #131C30 100%);
   background-size: 320px 100%; animation: shimmer 1.3s linear infinite; border-radius: var(--radius-sm);
@@ -1184,52 +1131,29 @@ body.scrolled header { box-shadow: 0 1px 0 rgba(32, 43, 72, 0.7); }
 
 /* --- En-têtes de tous les écrans : plus de bandeau, seulement des boutons flottants (pleins, sans flou) ;
    le contenu passe dessous en défilant. --- */
-header {
-  background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
-  box-shadow: none !important; pointer-events: none;
-}
 header > * { pointer-events: auto; }
 header .icon-btn, header > button, header .menu-wrap > button, header .header-actions > button {
   background: var(--surface-high); border-color: var(--border);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 header .icon-btn.active { background: var(--accent-soft); border-color: var(--accent); }
-/* Le fond flouté monte bien au-delà du haut de l'écran : le bord (que le flou rend transparent) est hors de vue,
-   la zone de l'heure / de l'encoche prend donc la couleur de la couverture, sans démarcation. */
-#detail-backdrop { top: calc(-220px - env(safe-area-inset-top, 0px)); height: calc(560px + env(safe-area-inset-top, 0px));
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0, 0, 0, 0.55) 70%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0, 0, 0, 0.55) 70%, transparent 100%); }
-/* En-têtes : ils restent en haut de la page et défilent avec elle (titre sans fond). Seule la fiche garde
-   ses boutons Retour et ⋮ flottants pendant le défilement. */
-header { position: relative; }
-#chapters-view header { position: sticky; }
 
 /* =====================================================================================================
    Fluidité : on retire les effets coûteux pour le téléphone (flous en temps réel, ombres sur chaque image,
    animations d'écran) ; les écrans s'affichent instantanément, seules les feuilles gardent un glissé court.
    ===================================================================================================== */
-*, *::before, *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 #main-nav { background: rgba(10, 15, 27, 0.98); }
 :is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal) { background: rgba(3, 6, 12, 0.72); }
 #chapters-toolbar, #library-toolbar { background: var(--surface-high); }
-.toast { background: var(--surface-high); }
 #chapters-view header > button, #chapters-view header .menu-wrap > button { background: var(--surface-high); border-color: var(--border); }
-.view-enter, .view-push { animation: none !important; }
 :is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal):not(.hidden) > :first-child { animation-duration: 0.2s; }
 :is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal).closing,
 :is(.sheet-modal, #filter-modal, #add-modal, #anilist-modal, #series-category-modal).closing > :first-child { animation-duration: 0.14s; }
 #chapters-toolbar:not(.hidden), #library-toolbar:not(.hidden) { animation-duration: 0.18s; }
-/* Images : affichées dès qu'elles arrivent, sans fondu ni fond animé ; pas d'ombre calculée sur chacune */
-.cover-wrap img, .update-row img, #detail-cover { opacity: 1 !important; transition: none; }
-.card img, .update-row img { box-shadow: none; }
-.badge { box-shadow: none; }
-/* Grandes listes : le navigateur ne dessine que ce qui est à l'écran */
 /* (pas sur les cartes de la grille : en affichage auto, la largeur des colonnes dépend de leur contenu) */
 .update-row, #chapters-list .chapter-row { content-visibility: auto; }
-.update-row { contain-intrinsic-size: auto 72px; }
-#chapters-list .chapter-row { contain-intrinsic-size: auto 46px; }
 /* Fond de la fiche : une toute petite image agrandie (flou naturel, calculé une fois) au lieu d'un flou en direct */
-#detail-backdrop { filter: none; transform: none; opacity: 0.42; background: none !important; overflow: hidden; }
+#detail-backdrop { opacity: 0.42; overflow: hidden; }
 #detail-backdrop canvas { width: 100%; height: 100%; display: block; }
 
 /* --- Appui long : on voit l'appui progresser, puis un petit rebond quand il a pris --- */
@@ -1237,7 +1161,6 @@ header { position: relative; }
 .card.pressing img { filter: brightness(0.82); transition: filter 0.48s ease; }
 @keyframes long-press-pop { 0% { transform: scale(0.92); } 55% { transform: scale(1.04); } 100% { transform: none; } }
 .card.long-pressed .cover-wrap { animation: long-press-pop 0.3s var(--ease-out); }
-#chapters-list .chapter-row { position: relative; overflow: hidden; }
 #chapters-list .chapter-row::after {
   content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit;
   background: var(--accent-soft); transform: scaleX(0); transform-origin: left center; opacity: 0;
@@ -1246,3 +1169,18 @@ header { position: relative; }
 #chapters-list .chapter-row.pressing::after { transform: scaleX(1); opacity: 1; transition: transform 0.48s linear, opacity 0.1s ease; }
 @keyframes row-pop { 0% { transform: scale(0.985); } 55% { transform: scale(1.012); } 100% { transform: none; } }
 #chapters-list .chapter-row.long-pressed { animation: row-pop 0.28s var(--ease-out); background: var(--accent-soft); }
+
+/* --- Tirer pour actualiser --- */
+#pull-indicator {
+  position: fixed; z-index: 30; left: 50%; top: calc(env(safe-area-inset-top, 0px) - 34px);
+  width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--surface-high); border: 1px solid var(--border); color: var(--muted);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4); transform: translate(-50%, 0); opacity: 0; pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+#pull-indicator.visible { opacity: 1; }
+#pull-indicator:not(.visible) { transition: opacity 0.15s ease, transform 0.2s ease; }
+#pull-indicator.ready, #pull-indicator.refreshing { color: var(--accent); border-color: var(--accent); }
+#pull-indicator .ico { width: 20px; height: 20px; }
+@keyframes pull-spin { to { transform: rotate(360deg); } }
+#pull-indicator.refreshing .ico { animation: pull-spin 0.7s linear infinite; }

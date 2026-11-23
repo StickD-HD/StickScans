@@ -186,14 +186,8 @@ function renderSeriesDetail(s) {
   setInfoLine(detailTeam, "Trad.", team, s.main_team ? `Team principale (dernier chapitre) · toutes : ${s.team || s.main_team}` : s.team);
   setInfoLine(detailType, "Type", [s.category, s.year].filter(Boolean).join(" · "));
   // Progression et temps de lecture estimés, à raison de minutes_per_chapter minutes par chapitre.
-  const mpc = s.minutes_per_chapter || lastMinutesPerChapter;
-  const total = s.total_chapters || 0;
-  const unread = s.unread_count || 0;
-  const readCount = Math.max(0, total - unread);
-  setInfoLine(detailProgress, "Progression", total ? `${readCount} / ${total} chapitres` : "");
-  setInfoLine(detailRemaining, "Reste à lire", total ? (unread ? `${unread} chap. · ${formatMinutes(unread * mpc)}` : "rien, tu es à jour ✓") : "",
-    `Estimation : ${mpc} min par chapitre`);
-  setInfoLine(detailReading, "Temps lu", readCount ? formatMinutes(readCount * mpc) : "", `Estimation : ${mpc} min par chapitre`);
+  if (s.minutes_per_chapter) lastMinutesPerChapter = s.minutes_per_chapter;
+  renderReadingLines(s.total_chapters || 0, s.unread_count || 0);
   const reason = CHECK_REASON_LABELS[s.check_reason] || "";
   setInfoLine(detailNextCheck, "Prochaine vérif.", s.next_check_at ? formatFuture(s.next_check_at) : "dès que possible",
     `Prochaine vérification${reason ? " (" + reason + ")" : ""}`);
@@ -265,8 +259,20 @@ async function loadChapters(prefetched = null) {
   renderChapters(chapters);
 }
 
+// Progression, reste à lire et temps lu : recalculés aussi à chaque changement de chapitres lus (sans attendre la fiche).
+function renderReadingLines(total, unread) {
+  const mpc = lastMinutesPerChapter;
+  const readCount = Math.max(0, total - unread);
+  setInfoLine(detailProgress, "Progression", total ? `${readCount} / ${total} chapitres` : "");
+  setInfoLine(detailRemaining, "Reste à lire", total ? (unread ? `${unread} chap. · ${formatMinutes(unread * mpc)}` : "rien, tu es à jour ✓") : "",
+    `Estimation : ${mpc} min par chapitre`);
+  setInfoLine(detailReading, "Temps lu", readCount ? formatMinutes(readCount * mpc) : "", `Estimation : ${mpc} min par chapitre`);
+}
+
 function renderChapters(chapters) {
   currentChapters = chapters;
+  renderReadingLines(chapters.length, chapters.filter((c) => !c.is_read).length);
+  fitDetailInfo();
   updateContinueReadingButton();
   updateAlignBanner();
   const total = currentChapters.length;

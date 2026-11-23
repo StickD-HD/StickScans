@@ -83,3 +83,10 @@ def as_page(fake_fetch_html):
     def fake_fetch_page(url, *args, **kwargs):
         return fake_fetch_html(url, *args, **kwargs), url
     return fake_fetch_page
+
+
+@pytest.fixture(autouse=True)
+def _pas_de_couvertures_en_arriere_plan(monkeypatch):
+    """Les tests ne téléchargent jamais de vraies couvertures."""
+    from app import covers
+    monkeypatch.setattr(covers, "cache_in_background", lambda: None)

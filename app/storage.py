@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-from . import backup, database, scrape_cache
+from . import backup, covers, database, scrape_cache
 
 
 def _tree(path: Path) -> tuple[int, int]:
@@ -52,6 +52,7 @@ def get_storage_info() -> dict:
         "backups": {"count": len(backups), "bytes": sum(b["size"] for b in backups)},
         "logs": {"files": log_files, "bytes": log_bytes},
         "page_cache": scrape_cache.stats(),
+        "covers": dict(zip(("files", "bytes"), covers.folder_size())),
         "data": {"files": data_files, "bytes": data_bytes},
         "disk": disk,
     }

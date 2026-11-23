@@ -3,6 +3,7 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 
 from app import anilist, main
+from app.routes import models, series
 from conftest import make_parsed, site_chapter
 
 
@@ -17,7 +18,7 @@ def three(db):
 
 
 def bulk(ids, action, category_id=None, tasks=None):
-    return main.bulk_series(main.BulkSeriesRequest(series_ids=ids, action=action, category_id=category_id),
+    return series.bulk_series(models.BulkSeriesRequest(series_ids=ids, action=action, category_id=category_id),
                             tasks or BackgroundTasks())
 
 
@@ -35,7 +36,7 @@ def test_tout_lu_puis_tout_non_lu(db, three):
 def test_categories_groupees(db, three):
     cat = db.create_category("Favoris")
     db.add_series_to_category(three[0], cat)
-    counts = main.bulk_series_categories(main.BulkIdsRequest(series_ids=three[:2]))
+    counts = series.bulk_series_categories(models.BulkIdsRequest(series_ids=three[:2]))
     assert counts == [{"id": cat, "name": "Favoris", "count": 1, "total": 2}]
     bulk(three[:2], "add_category", cat)
     assert db.get_category_series_ids(cat) == {three[0], three[1]}

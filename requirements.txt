@@ -9,3 +9,4 @@ requests==2.32.3
 urllib3==2.3.0
 beautifulsoup4==4.15.0
 python-multipart==0.0.33
+pillow==12.3.0
