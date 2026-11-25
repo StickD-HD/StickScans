@@ -334,7 +334,6 @@ main#library { padding: 0 18px; }
   display: flex; align-items: center; justify-content: center; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
-#detail-actions #library-btn { order: 1; background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 /* en dernier : si la place manque, c'est lui qui passe à la ligne */
 #anilist-action-btn.linked { background: var(--accent2-soft); color: var(--accent2); border-color: var(--accent2); flex: 1 1 100%; }
 
@@ -840,7 +839,6 @@ body.selecting #toasts { bottom: calc(var(--nav-height) + env(safe-area-inset-bo
 /* Fiche : AniList sur toute la largeur, puis « Dans la bibliothèque » à gauche et « Scan-Manga » à droite */
 #detail-actions { display: grid; gap: 8px; }
 #detail-actions #anilist-action-btn { grid-column: 1 / -1; order: 0; }
-#detail-actions #library-btn { order: 1; }
 #detail-actions #detail-source-btn { order: 2; }
 
 /* Chapitres non lus alors qu'un chapitre plus loin est lu (chapitre sauté) */
@@ -1216,11 +1214,13 @@ header .icon-btn.active { background: var(--accent-soft); border-color: var(--ac
 .state-tab.active { color: var(--text); border-color: var(--state, var(--accent)); background: color-mix(in srgb, var(--state, var(--accent)) 18%, var(--surface)); }
 .state-tab.active span { opacity: 1; }
 
-/* Bouton d'état dans la fiche : pleine largeur, au-dessus d'AniList */
-#detail-actions #state-btn { grid-column: 1 / -1; order: -1; justify-content: flex-start; gap: 10px;
-  border-color: color-mix(in srgb, var(--state) 55%, var(--border)); background: color-mix(in srgb, var(--state) 12%, var(--surface)); color: var(--text); }
-#detail-actions #state-btn .chevron { margin-left: auto; color: var(--muted); }
+/* État dans la fiche : bouton à gauche de Scan-Manga (place de l'ancien « Dans la bibliothèque ») */
+#detail-actions #state-btn {
+  order: 1; justify-content: center; gap: 8px; color: var(--text);
+  border-color: color-mix(in srgb, var(--state) 60%, var(--border)); background: color-mix(in srgb, var(--state) 14%, var(--surface));
+}
 #detail-actions #state-btn #state-btn-label { font-weight: 700; }
+#detail-actions #state-btn .chevron { width: 14px; height: 14px; color: var(--muted); }
 
 /* Feuille de choix */
 .state-options .state-option { gap: 12px; }
@@ -1229,3 +1229,5 @@ header .icon-btn.active { background: var(--accent-soft); border-color: var(--ac
 .state-option.current { border-color: color-mix(in srgb, var(--state) 60%, var(--border)); background: color-mix(in srgb, var(--state) 12%, var(--surface)); }
 .state-option > .ico { margin-left: auto; width: 18px; height: 18px; color: var(--state); }
 .state-option.state-auto { margin-top: 4px; }
+/* Les lignes ne se tassent jamais : si tout ne tient pas à côté de la couverture, les moins utiles sont masquées */
+#detail-info > * { flex-shrink: 0; }

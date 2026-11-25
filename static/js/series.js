@@ -32,7 +32,6 @@ const CHECK_REASON_LABELS = {
 };
 const detailSourceLink = document.getElementById("detail-source-link");
 const anilistActionBtn = document.getElementById("anilist-action-btn");
-const libraryBtn = document.getElementById("library-btn");
 const seriesCategoryModal = document.getElementById("series-category-modal");
 const seriesCategoryModalClose = document.getElementById("series-category-modal-close");
 const anilistModal = document.getElementById("anilist-modal");
@@ -454,7 +453,6 @@ categoryMenuBtn.addEventListener("click", () => {
   loadSeriesCategories();
 });
 // « Dans la bibliothèque » : la bibliothèque est l'ensemble des séries, toutes catégories confondues ; un toucher la retire.
-libraryBtn.addEventListener("click", () => removeSeriesBtn.click());
 
 removeSeriesBtn.addEventListener("click", async () => {
   if (!confirm("Retirer cette série de la bibliothèque ?")) return;
