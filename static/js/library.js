@@ -184,11 +184,13 @@ async function loadLibrary() {
   renderLibrary(text);
 }
 
-function renderLibrary(text) {
+function renderLibrary(text, force = false) {
   // Rien n'a changé depuis le dernier affichage (retour d'une fiche, onglet rouvert) : on ne redessine rien.
-  if (text === lastLibraryText && grid.querySelector(".card:not(.skeleton)")) return;
+  if (!force && text === lastLibraryText && grid.querySelector(".card:not(.skeleton)")) return;
   lastLibraryText = text;
-  const series = JSON.parse(text);
+  const allSeries = JSON.parse(text);
+  renderStateTabs(allSeries); // onglets d'état (avec les nombres), puis seulement les séries de l'onglet choisi
+  const series = filterByState(allSeries);
   libraryShown = series;
 
   grid.innerHTML = "";
@@ -197,6 +199,7 @@ function renderLibrary(text) {
     // Bibliothèque vide : on propose d'ajouter une série ; filtres trop stricts : on le dit.
     const filtered = Boolean(activeCategoryId || genreSelect.value || statusSelect.value || anilistFilterSelect.value || hideReadCheckbox.checked || searchInput.value.trim());
     emptyText.textContent = filtered ? "Aucune série ne correspond à ta recherche ou à tes filtres." : "Aucune série suivie pour l'instant.";
+    if (allSeries.length && activeStateTab) emptyText.textContent = `Aucune série « ${STATE_LABEL[activeStateTab]} ».`;
     emptyAddBtn.classList.toggle("hidden", filtered);
   }
 

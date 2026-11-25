@@ -114,6 +114,10 @@ bulkModal.addEventListener("click", async (e) => {
   if (!btn) return;
   const action = btn.dataset.bulk;
   const n = librarySelected.size;
+  if (action === "state") {
+    openBulkStateSheet();
+    return;
+  }
   if (action === "categories") {
     swapModal(bulkModal, bulkCategoryModal);
     openBulkCategories();

@@ -39,14 +39,15 @@ def test_ne_recule_jamais(db, linked, pushes, monkeypatch):
     assert db.get_series_by_id(linked)["anilist_progress"] == 15  # l'appli reflète AniList
 
 
-def test_avance_sans_toucher_au_statut(db, linked, pushes, monkeypatch):
-    _remote(monkeypatch, progress=5, status="PAUSED")
+@pytest.mark.parametrize("remote_status", ["COMPLETED", "REPEATING", "CURRENT"])
+def test_avance_sans_toucher_au_statut(db, linked, pushes, monkeypatch, remote_status):
+    _remote(monkeypatch, progress=5, status=remote_status)
     db.mark_read_up_to(linked, 12.0)
     anilist.push_progress(linked)
     assert pushes == [{"status": None, "progress": 12}]
 
 
-@pytest.mark.parametrize("remote_status", [None, "PLANNING"])
+@pytest.mark.parametrize("remote_status", [None, "PLANNING", "PAUSED", "DROPPED"])  # lire = reprendre la série
 def test_passe_en_cours_a_la_premiere_lecture(db, linked, pushes, monkeypatch, remote_status):
     _remote(monkeypatch, progress=0, status=remote_status)
     db.mark_read_up_to(linked, 1.0)

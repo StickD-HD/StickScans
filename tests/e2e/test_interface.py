@@ -165,3 +165,30 @@ def test_ajout_et_selection_de_series(page):
     page.click("#library-actions-btn")
     page.click("[data-bulk='mark_read']")
     expect(page.locator("#library-toolbar")).to_be_hidden()
+
+
+def test_etats_de_lecture(page):
+    tabs = page.locator("#state-tabs .state-tab")
+    expect(tabs.first).to_contain_text("Tout")
+    # Alpha : commencée -> en cours ; Beta : tout lu et terminée sur le site -> terminé
+    # (les autres tests du fichier partagent la même base : on ne compte pas Gamma, qu'ils peuvent modifier)
+    expect(page.locator("#state-tabs [data-state='reading']")).to_be_visible()
+    expect(page.locator("#state-tabs [data-state='completed']")).to_contain_text("1")
+    page.click("#grid .card:has-text('Alpha')")
+    expect(page.locator("#state-btn-label")).to_have_text("En cours")
+    page.click("#state-btn")
+    page.click("#state-options [data-pick='paused']")
+    expect(page.locator("#state-btn-label")).to_have_text("En pause")
+    page.click("#back-btn")
+    page.click("#state-tabs [data-state='paused']")
+    expect(page.locator("#grid .card")).to_have_count(1)
+    expect(page.locator("#grid .card")).to_contain_text("Alpha")
+    # plusieurs séries d'un coup
+    page.click("#state-tabs [data-state='']")
+    page.click("#home-menu-btn")
+    page.click("#library-select-btn")
+    page.click("#library-select-all-btn")
+    page.click("#library-actions-btn")
+    page.click("[data-bulk='state']")
+    page.click("#state-options [data-pick='dropped']")
+    expect(page.locator("#state-tabs [data-state='dropped']")).to_contain_text("3")

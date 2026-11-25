@@ -122,6 +122,7 @@ NEW_SERIES_COLUMNS = {
     "missing_since": "TEXT",   # fiche introuvable sur le site depuis cette date (UTC) ; vide = page trouvée
     "next_check_at": "TEXT",   # prochaine vérification automatique (UTC) ; vide = dès que possible
     "check_reason": "TEXT",    # raison de cet intervalle (voir schedule.REASONS)
+    "reading_state": "TEXT",  # état de lecture choisi à la main (sinon calculé : voir reading_state)
 }
 
 NEW_CHAPTERS_COLUMNS = {
@@ -378,12 +379,59 @@ def remove_series_from_category(series_id: int, category_id: int):
 
 # --- Séries ---
 
+# État de lecture d'une série, simple à suivre :
+# - choisi à la main (colonne reading_state) : il l'emporte ;
+# - sinon, pour une série liée à AniList en pause / abandonnée / terminée là-bas : ce statut AniList ;
+# - sinon, déduit de ta lecture : rien lu = à lire ; des chapitres restent = en cours ; tout lu = terminé si la série
+#   est finie sur le site, en cours sinon (tu es à jour, la suite arrivera).
+READING_STATES = ("reading", "planning", "paused", "completed", "dropped")
+ANILIST_TO_STATE = {"PAUSED": "paused", "DROPPED": "dropped", "COMPLETED": "completed"}
+FINISHED_SITE_STATUSES = {"terminé", "terminée", "completed", "fini", "achevé"}
+
+
+def auto_reading_state(series: dict) -> str:
+    total = series.get("total_chapters") or 0
+    unread = series.get("unread_count") or 0
+    if total == 0 or unread == total:
+        return "planning"
+    if unread > 0:
+        return "reading"
+    return "completed" if (series.get("status") or "").strip().lower() in FINISHED_SITE_STATUSES else "reading"
+
+
+def reading_state(series: dict) -> str:
+    if series.get("reading_state") in READING_STATES:
+        return series["reading_state"]
+    if series.get("anilist_id") and series.get("anilist_status") in ANILIST_TO_STATE:
+        return ANILIST_TO_STATE[series["anilist_status"]]
+    return auto_reading_state(series)
+
+
+def set_reading_state(series_id: int, state: str | None):
+    """state=None : revient au calcul automatique."""
+    if state is not None and state not in READING_STATES:
+        raise ValueError(state)
+    with get_conn() as conn:
+        conn.execute("UPDATE series SET reading_state = ? WHERE id = ?", (state, series_id))
+
+
+def resume_reading_state(series_id: int):
+    """Tu lis un chapitre d'une série « à lire », « en pause » ou « abandonnée » : le choix manuel s'efface, la série
+    repasse en automatique (donc en cours)."""
+    with get_conn() as conn:
+        conn.execute("UPDATE series SET reading_state = NULL WHERE id = ? AND reading_state IN ('planning', 'paused', 'dropped')",
+                     (series_id,))
+
+
 def _apply_display_cover(series: dict) -> dict:
     """Couverture affichée : celle d'AniList quand la série y est liée, sauf si une couverture a été choisie
     à la main (cover_locked)."""
     if series.get("anilist_cover_url") and not series.get("cover_locked"):
         series["cover_url"] = series["anilist_cover_url"]
     series["cover_url"] = _local_cover(series.get("cover_url"))
+    if "unread_count" in series:
+        series["state"] = reading_state(series)
+        series["auto_state"] = auto_reading_state(series)
     return series
 
 

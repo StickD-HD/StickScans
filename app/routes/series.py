@@ -16,7 +16,8 @@ from ..scraper import (
     site_pause_message,
 )
 from .common import READING_MINUTES_PER_CHAPTER
-from .models import AddSeriesRequest, BulkIdsRequest, BulkSeriesRequest, CategoryRequest, ChangeUrlRequest
+from .models import (AddSeriesRequest, BulkIdsRequest, BulkSeriesRequest, CategoryRequest, ChangeUrlRequest,
+                     ReadingStateRequest)
 
 router = APIRouter()
 
@@ -153,7 +154,19 @@ def refresh_all():
     return {"ok": True, "message": "Vérification lancée en arrière-plan"}
 
 
-BULK_ACTIONS = {"mark_read", "mark_unread", "delete", "add_category", "remove_category"}
+@router.put("/api/series/{series_id}/state")
+def set_series_state(series_id: int, payload: ReadingStateRequest, background_tasks: BackgroundTasks):
+    """État de lecture choisi à la main (ou None : automatique, selon ta lecture). Suivi sur AniList si liée."""
+    if not database.get_series_by_id(series_id):
+        raise HTTPException(404, "Série introuvable")
+    if payload.state is not None and payload.state not in database.READING_STATES:
+        raise HTTPException(400, "État inconnu")
+    database.set_reading_state(series_id, payload.state)
+    background_tasks.add_task(anilist.push_state, series_id)
+    return database.get_series_by_id(series_id)
+
+
+BULK_ACTIONS = {"mark_read", "mark_unread", "delete", "add_category", "remove_category", "set_state"}
 
 
 @router.post("/api/series/bulk")
@@ -163,12 +176,19 @@ def bulk_series(payload: BulkSeriesRequest, background_tasks: BackgroundTasks):
     if payload.action in ("add_category", "remove_category"):
         if not any(c["id"] == payload.category_id for c in database.get_all_categories()):
             raise HTTPException(404, "Catégorie introuvable")
+    if payload.action == "set_state" and payload.state is not None and payload.state not in database.READING_STATES:
+        raise HTTPException(400, "État inconnu")
     done = 0
     for series_id in dict.fromkeys(payload.series_ids):  # sans doublons, dans l'ordre
         series = database.get_series_by_id(series_id)
         if not series:
             continue
-        if payload.action == "mark_read":
+        if payload.action == "set_state":
+            database.set_reading_state(series_id, payload.state)
+            if series.get("anilist_id"):
+                background_tasks.add_task(anilist.push_state, series_id)
+        elif payload.action == "mark_read":
+            database.resume_reading_state(series_id)
             database.mark_all_read(series_id)
             if series.get("anilist_id"):
                 background_tasks.add_task(anilist.push_progress, series_id)

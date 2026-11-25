@@ -142,6 +142,8 @@ function clearDetailUI() {
   document.getElementById("chapter-hint").classList.add("hidden");
   continueReadingBtn.classList.add("hidden");
   document.getElementById("skipped-banner").classList.add("hidden");
+  document.getElementById("state-btn").className = "state-loading";
+  document.getElementById("state-btn-label").textContent = "…";
   anilistActionBtn.innerHTML = `${icon("link")}<span>AniList</span>`;
   anilistActionBtn.classList.remove("linked");
   anilistLinked.classList.add("hidden");
@@ -168,8 +170,9 @@ function renderSeriesDetail(s) {
   setDetailBackdrop(s.cover_url);
   detailTitle.textContent = s.title || "Sans titre";
 
+  renderStateButton(s);
   detailMeta.innerHTML = s.status
-    ? `<span class="info-label">État</span><span class="status-text ${statusClass(s.status)}">${escapeHtml(s.status)}</span>` : "";
+    ? `<span class="info-label">Parution</span><span class="status-text ${statusClass(s.status)}">${escapeHtml(s.status)}</span>` : "";
   detailMeta.classList.toggle("hidden", !s.status);
 
   detailGenres.innerHTML = "";

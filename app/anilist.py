@@ -297,9 +297,30 @@ def fetch_entry(media_id: int) -> dict:
 
 
 def _status_when_reading(current_status: str | None) -> str | None:
-    """Statut à envoyer quand une lecture est enregistrée : « En cours » si la série n'a aucun statut ou est
-    seulement « À lire » ; sinon on ne touche pas au statut (En pause, Abandonné, Terminé, Relecture...)."""
-    return "CURRENT" if current_status in (None, "PLANNING") else None
+    """Statut à envoyer quand une lecture est enregistrée : « En cours » si la série n'avait aucun statut, était
+    « À lire », « En pause » ou « Abandonnée » (lire un chapitre, c'est reprendre la série) ; une série terminée ou
+    en relecture garde son statut."""
+    return "CURRENT" if current_status in (None, "PLANNING", "PAUSED", "DROPPED") else None
+
+
+STATE_TO_ANILIST = {"reading": "CURRENT", "planning": "PLANNING", "paused": "PAUSED", "completed": "COMPLETED",
+                    "dropped": "DROPPED"}
+
+
+def push_state(series_id: int):
+    """État de lecture changé dans l'appli : le même statut part sur AniList (série liée et jeton configuré)."""
+    series = database.get_series_by_id(series_id)
+    if not series or not series.get("anilist_id") or not _token():
+        return
+    if series.get("reading_state"):
+        state = series["reading_state"]
+    else:
+        state = database.auto_reading_state(series)  # « Automatique » : AniList suit ta lecture
+    status = STATE_TO_ANILIST[state]
+    if status == "CURRENT" and series.get("anilist_status") == "REPEATING":
+        return  # en relecture sur AniList : c'est aussi « en cours », on n'y touche pas
+    if status != series.get("anilist_status"):
+        push_update(series_id, status=status)
 
 
 def link_series(series_id: int, media_id: int, title: str):
@@ -512,6 +533,10 @@ def sync_all(force: bool = False) -> dict:
                 old = (s.get("anilist_status"), s.get("anilist_progress"), s.get("anilist_score"),
                        s.get("anilist_start_date"), s.get("anilist_end_date"), s.get("anilist_cover_url"),
                        s.get("anilist_notes"))
+                if new[0] != old[0] and s.get("reading_state"):
+                    # Statut changé sur AniList depuis la dernière synchro : c'est le choix le plus récent,
+                    # l'état choisi à la main dans l'appli s'efface (la série suit maintenant AniList).
+                    database.set_reading_state(s["id"], None)
                 if new != old:
                     database.set_series_anilist_data(
                         s["id"], status=new[0], progress=new[1], score=new[2], start_date=new[3], end_date=new[4],

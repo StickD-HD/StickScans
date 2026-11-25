@@ -38,6 +38,11 @@ class BulkSeriesRequest(BaseModel):
     series_ids: list[int] = Field(min_length=1, max_length=1000)
     action: str
     category_id: int | None = None
+    state: str | None = None  # action « set_state » : état de lecture, ou None pour revenir en automatique
+
+
+class ReadingStateRequest(BaseModel):
+    state: str | None = None  # reading, planning, paused, completed, dropped ; None = automatique
 
 
 class BulkIdsRequest(BaseModel):

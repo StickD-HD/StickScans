@@ -1184,3 +1184,48 @@ header .icon-btn.active { background: var(--accent-soft); border-color: var(--ac
 #pull-indicator .ico { width: 20px; height: 20px; }
 @keyframes pull-spin { to { transform: rotate(360deg); } }
 #pull-indicator.refreshing .ico { animation: pull-spin 0.7s linear infinite; }
+
+/* --- États de lecture --- */
+:root {
+  --state-reading: #4C8DFF;
+  --state-planning: #A78BFA;
+  --state-paused: #F5B04C;
+  --state-completed: #34D399;
+  --state-dropped: #F87171;
+}
+.state-reading { --state: var(--state-reading); }
+.state-planning { --state: var(--state-planning); }
+.state-paused { --state: var(--state-paused); }
+.state-completed { --state: var(--state-completed); }
+.state-dropped { --state: var(--state-dropped); }
+.state-auto, .state-loading { --state: var(--muted); }
+.state-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--state, var(--muted)); flex: none; }
+
+/* Onglets de la bibliothèque : défilent à l'horizontale si besoin */
+.state-tabs {
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  padding: 2px 18px 12px; margin: 0 auto; max-width: 980px;
+}
+.state-tabs::-webkit-scrollbar { display: none; }
+.state-tabs.hidden { display: none; }
+.state-tab {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: var(--radius-pill);
+  background: var(--surface); border: 1px solid var(--border); color: var(--muted); font-size: 0.8rem; font-weight: 700;
+}
+.state-tab span { font-size: 0.72rem; font-weight: 700; opacity: 0.75; }
+.state-tab.active { color: var(--text); border-color: var(--state, var(--accent)); background: color-mix(in srgb, var(--state, var(--accent)) 18%, var(--surface)); }
+.state-tab.active span { opacity: 1; }
+
+/* Bouton d'état dans la fiche : pleine largeur, au-dessus d'AniList */
+#detail-actions #state-btn { grid-column: 1 / -1; order: -1; justify-content: flex-start; gap: 10px;
+  border-color: color-mix(in srgb, var(--state) 55%, var(--border)); background: color-mix(in srgb, var(--state) 12%, var(--surface)); color: var(--text); }
+#detail-actions #state-btn .chevron { margin-left: auto; color: var(--muted); }
+#detail-actions #state-btn #state-btn-label { font-weight: 700; }
+
+/* Feuille de choix */
+.state-options .state-option { gap: 12px; }
+.state-option .state-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.state-option .state-text small { color: var(--muted); font-size: 0.74rem; font-weight: 500; }
+.state-option.current { border-color: color-mix(in srgb, var(--state) 60%, var(--border)); background: color-mix(in srgb, var(--state) 12%, var(--surface)); }
+.state-option > .ico { margin-left: auto; width: 18px; height: 18px; color: var(--state); }
+.state-option.state-auto { margin-top: 4px; }

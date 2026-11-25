@@ -25,6 +25,7 @@ def mark_read_up_to(series_id: int, payload: MarkReadUpToRequest, background_tas
     except ValueError:
         raise HTTPException(400, "Numéro de chapitre invalide")
     database.mark_read_up_to(series_id, number_float)
+    database.resume_reading_state(series_id)
     background_tasks.add_task(anilist.push_progress, series_id)  # la réponse n'attend pas AniList
     return database.get_series_by_id(series_id)
 
@@ -34,6 +35,7 @@ def mark_all_read(series_id: int, background_tasks: BackgroundTasks):
     if not database.get_series_by_id(series_id):
         raise HTTPException(404, "Série introuvable")
     database.mark_all_read(series_id)
+    database.resume_reading_state(series_id)
     background_tasks.add_task(anilist.push_progress, series_id)
     return database.get_series_by_id(series_id)
 
@@ -52,6 +54,8 @@ def reset_progress(series_id: int):
 def toggle_chapter_read(chapter_id: int, payload: ToggleReadRequest, background_tasks: BackgroundTasks):
     database.set_chapter_read(chapter_id, payload.is_read)
     series_id = database.get_series_id_for_chapter(chapter_id)
+    if series_id and payload.is_read:
+        database.resume_reading_state(series_id)
     if series_id:
         background_tasks.add_task(anilist.push_progress, series_id)
     return {"ok": True}
@@ -61,6 +65,8 @@ def toggle_chapter_read(chapter_id: int, payload: ToggleReadRequest, background_
 def bulk_toggle_read(payload: BulkReadRequest, background_tasks: BackgroundTasks):
     database.set_chapters_read(payload.chapter_ids, payload.is_read)
     for series_id in database.get_series_ids_for_chapters(payload.chapter_ids):
+        if payload.is_read:
+            database.resume_reading_state(series_id)
         background_tasks.add_task(anilist.push_progress, series_id)
     return {"ok": True}
 
